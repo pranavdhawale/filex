@@ -13,6 +13,7 @@ import (
 	"github.com/pranavdhawale/bytefile/internal/models"
 	"github.com/pranavdhawale/bytefile/internal/repository"
 	"github.com/pranavdhawale/bytefile/internal/storage"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type UploadHandler struct {
@@ -150,13 +151,21 @@ func (h *UploadHandler) HandleComplete(w http.ResponseWriter, r *http.Request) {
 
 	// Fetch session
 	session, err := h.multipartRepo.GetByID(r.Context(), req.FileID)
-	if err != nil {
+	if err != nil || session == nil {
+		// It could be nil if ErrNoDocuments was swallowed, or an actual error.
 		// Check if file already exists (idempotency)
 		if existing, _ := h.fileRepo.GetByID(r.Context(), req.FileID); existing != nil {
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]string{"status": "already_completed", "file_id": req.FileID})
 			return
 		}
+
+		if err != nil {
+			slog.Error("Database error checking session", "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
 		http.Error(w, "upload session not found or expired", http.StatusNotFound)
 		return
 	}
@@ -202,6 +211,14 @@ func (h *UploadHandler) HandleComplete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.fileRepo.Insert(r.Context(), file); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			// This happens if two concurrent requests both tried to complete the same file.
+			// One won the race, the other hit the unique _id constraint on the files collection.
+			// Treat as idempotently successful.
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]string{"status": "already_completed", "file_id": req.FileID})
+			return
+		}
 		slog.Error("Failed to insert file record", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return

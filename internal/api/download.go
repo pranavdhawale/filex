@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pranavdhawale/bytefile/internal/config"
 	"github.com/pranavdhawale/bytefile/internal/crypto"
 	"github.com/pranavdhawale/bytefile/internal/repository"
@@ -38,6 +39,13 @@ func (h *DownloadHandler) HandleDownload(w http.ResponseWriter, r *http.Request)
 	fileID := r.PathValue("id")
 	if fileID == "" {
 		http.Error(w, "missing file id", http.StatusBadRequest)
+		return
+	}
+
+	// Validate UUID format
+	if _, err := uuid.Parse(fileID); err != nil {
+		slog.Warn("Invalid file ID format requested", "id", fileID, "ip", r.RemoteAddr)
+		http.Error(w, "invalid file id format", http.StatusBadRequest)
 		return
 	}
 
