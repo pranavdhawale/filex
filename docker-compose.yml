@@ -1,0 +1,128 @@
+version: "3.8"
+
+services:
+  mongo:
+    image: bitnami/mongodb:latest
+    container_name: bytefile-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGODB_REPLICA_SET_MODE=primary
+      - MONGODB_REPLICA_SET_NAME=rs0
+      - MONGODB_PORT_NUMBER=27017
+      - MONGODB_INITIAL_PRIMARY_HOST=mongo
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=27017
+      - MONGODB_ADVERTISED_HOSTNAME=mongo
+      - MONGODB_ENABLE_JOURNAL=true
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - mongo_data:/bitnami/mongodb
+
+  redis:
+    image: redis:latest
+    container_name: bytefile-redis
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:latest
+    container_name: bytefile-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    # Initialize the default bucket 'files'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  createbuckets:
+    image: minio/mc:latest
+    container_name: bytefile-mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin &&
+      /usr/bin/mc mb myminio/files || true &&
+      /usr/bin/mc anonymous set download myminio/files || true
+      "
+
+  api:
+    build: .
+    container_name: bytefile-api
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - ENVIRONMENT=development
+      - MONGO_URI=mongodb://mongo:27017/?replicaSet=rs0
+      - REDIS_URI=redis://redis:6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - SWK=super-secret-wrapper-key
+    depends_on:
+      - mongo
+      - redis
+      - minio
+      - createbuckets
+
+  worker-expiry:
+    build: .
+    container_name: bytefile-worker-expiry
+    command: ["--worker=expiry"]
+    environment:
+      - ENVIRONMENT=development
+      - MONGO_URI=mongodb://mongo:27017/?replicaSet=rs0
+      - REDIS_URI=redis://redis:6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    depends_on:
+      - mongo
+      - redis
+      - minio
+
+  worker-multipart:
+    build: .
+    container_name: bytefile-worker-multipart
+    command: ["--worker=multipart"]
+    environment:
+      - ENVIRONMENT=development
+      - MONGO_URI=mongodb://mongo:27017/?replicaSet=rs0
+      - REDIS_URI=redis://redis:6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    depends_on:
+      - mongo
+      - redis
+      - minio
+
+  worker-gc:
+    build: .
+    container_name: bytefile-worker-gc
+    command: ["--worker=gc"]
+    environment:
+      - ENVIRONMENT=development
+      - MONGO_URI=mongodb://mongo:27017/?replicaSet=rs0
+      - REDIS_URI=redis://redis:6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    depends_on:
+      - mongo
+      - redis
+      - minio
+
+volumes:
+  mongo_data:
+  minio_data:
