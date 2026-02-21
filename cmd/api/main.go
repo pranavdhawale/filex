@@ -9,11 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pranavdhawale/bytefile/internal/api"
 	"github.com/pranavdhawale/bytefile/internal/config"
 	"github.com/pranavdhawale/bytefile/internal/database"
 	"github.com/pranavdhawale/bytefile/internal/logger"
 	"github.com/pranavdhawale/bytefile/internal/repository"
 	"github.com/pranavdhawale/bytefile/internal/server"
+	"github.com/pranavdhawale/bytefile/internal/storage"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -27,6 +29,30 @@ func main() {
 	// Create root context that listens for termination signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Initialize Storage (MinIO)
+	minioStorage, err := storage.NewStorage(cfg)
+	if err != nil {
+		slog.Error("Failed to initialize MinIO storage", "error", err)
+		os.Exit(1)
+	}
+
+	// Verify bucket existence (Retry a few times as MinIO might be starting)
+	var bucketExists bool
+	for i := 0; i < 5; i++ {
+		exists, err := minioStorage.BucketExists(ctx)
+		if err == nil && exists {
+			bucketExists = true
+			break
+		}
+		slog.Warn("Waiting for MinIO bucket 'files' to be ready...", "attempt", i+1)
+		time.Sleep(2 * time.Second)
+	}
+	if !bucketExists {
+		slog.Error("MinIO bucket 'files' does not exist or is not reachable")
+		os.Exit(1)
+	}
+	slog.Info("MinIO storage verified")
 
 	// Initialize MongoDB Connection
 	dbClient, err := database.Connect(ctx, cfg.MongoURI)
@@ -58,16 +84,16 @@ func main() {
 	switch *workerFlag {
 	case "expiry":
 		slog.Info("Starting worker", "type", "expiry")
-		runWorker(ctx, "expiry", dbClient)
+		runWorker(ctx, "expiry", dbClient, minioStorage)
 	case "multipart":
 		slog.Info("Starting worker", "type", "multipart")
-		runWorker(ctx, "multipart", dbClient)
+		runWorker(ctx, "multipart", dbClient, minioStorage)
 	case "gc":
 		slog.Info("Starting worker", "type", "gc")
-		runWorker(ctx, "gc", dbClient)
+		runWorker(ctx, "gc", dbClient, minioStorage)
 	case "":
 		slog.Info("Starting API server")
-		runAPI(ctx, cfg, dbClient)
+		runAPI(ctx, cfg, dbClient, minioStorage)
 	default:
 		slog.Error("Unknown worker type specified", "worker", *workerFlag)
 		os.Exit(1)
@@ -76,7 +102,7 @@ func main() {
 
 // runWorker is a placeholder for running background worker processes
 // It blocks until the context is canceled.
-func runWorker(ctx context.Context, workerType string, dbClient *mongo.Client) {
+func runWorker(ctx context.Context, workerType string, dbClient *mongo.Client, st *storage.Storage) {
 	// TODO: Initialize specific worker implementations here
 
 	// Block until signal is received
@@ -85,8 +111,17 @@ func runWorker(ctx context.Context, workerType string, dbClient *mongo.Client) {
 }
 
 // runAPI starts the HTTP server and manages graceful shutdown
-func runAPI(ctx context.Context, cfg *config.Config, dbClient *mongo.Client) {
-	srv := server.New(cfg)
+func runAPI(ctx context.Context, cfg *config.Config, dbClient *mongo.Client, st *storage.Storage) {
+	// Initialize repositories
+	db := database.GetDatabase(dbClient)
+	fileRepo := repository.NewFileRepository(db)
+	multipartRepo := repository.NewMultipartRepository(db)
+
+	// Initialize handlers
+	uploadHandler := api.NewUploadHandler(fileRepo, multipartRepo, st, cfg)
+	downloadHandler := api.NewDownloadHandler(fileRepo, st, cfg)
+
+	srv := server.New(cfg, uploadHandler, downloadHandler)
 
 	// Start server in a separate goroutine
 	errChan := make(chan error, 1)

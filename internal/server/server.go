@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pranavdhawale/bytefile/internal/api"
 	"github.com/pranavdhawale/bytefile/internal/config"
 )
 
@@ -15,12 +16,17 @@ type Server struct {
 }
 
 // New creates a new web server configured with standard routes.
-func New(cfg *config.Config) *Server {
+func New(cfg *config.Config, uploadHandler *api.UploadHandler, downloadHandler *api.DownloadHandler) *Server {
 	mux := http.NewServeMux()
 
 	// Health and Readiness endpoints
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/ready", readyHandler)
+
+	// API endpoints
+	mux.HandleFunc("POST /upload/init", uploadHandler.HandleInit)
+	mux.HandleFunc("POST /upload/complete", uploadHandler.HandleComplete)
+	mux.HandleFunc("GET /f/{id}", downloadHandler.HandleDownload)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
