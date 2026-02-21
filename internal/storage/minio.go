@@ -112,6 +112,23 @@ func (s *Storage) AbortMultipartUpload(ctx context.Context, objectName, uploadID
 	return nil
 }
 
+// RemoveObject explicitly deletes an object from the bucket.
+func (s *Storage) RemoveObject(ctx context.Context, objectName string) error {
+	err := s.client.RemoveObject(ctx, s.bucket, objectName, minio.RemoveObjectOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to remove object %s: %w", objectName, err)
+	}
+	return nil
+}
+
+// ListObjects returns a channel of object info to iterate over all objects in the bucket.
+func (s *Storage) ListObjects(ctx context.Context, prefix string) <-chan minio.ObjectInfo {
+	return s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: true,
+	})
+}
+
 // BucketExists checks if the bucket exists
 func (s *Storage) BucketExists(ctx context.Context) (bool, error) {
 	return s.client.BucketExists(ctx, s.bucket)

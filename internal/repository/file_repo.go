@@ -15,6 +15,49 @@ type FileRepository struct {
 	collection *mongo.Collection
 }
 
+// FindExpired returns a list of files whose expires_at time has passed.
+func (r *FileRepository) FindExpired(ctx context.Context, limit int) ([]*models.File, error) {
+	now := time.Now()
+	filter := bson.M{"expires_at": bson.M{"$lte": now}}
+	opts := options.Find().SetLimit(int64(limit))
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to cursor expired files: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var files []*models.File
+	if err := cursor.All(ctx, &files); err != nil {
+		return nil, fmt.Errorf("failed to decode expired files: %w", err)
+	}
+
+	return files, nil
+}
+
+// Delete removes a file document from the database by ID.
+func (r *FileRepository) Delete(ctx context.Context, id string) error {
+	filter := bson.M{"_id": id}
+	_, err := r.collection.DeleteOne(ctx, filter)
+	if err != nil {
+		return fmt.Errorf("failed to delete file document: %w", err)
+	}
+	return nil
+}
+
+// ExistsByObjectKey checks if a specific object key exists in the files collection.
+func (r *FileRepository) ExistsByObjectKey(ctx context.Context, objectKey string) (bool, error) {
+	filter := bson.M{"object_key": objectKey}
+	err := r.collection.FindOne(ctx, filter, options.FindOne().SetProjection(bson.M{"_id": 1})).Err()
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check existence by object_key: %w", err)
+	}
+	return true, nil
+}
+
 // NewFileRepository creates a repository for File entities.
 func NewFileRepository(db *mongo.Database) *FileRepository {
 	return &FileRepository{
@@ -76,6 +119,3 @@ func (r *FileRepository) ExtendTTL(ctx context.Context, id string, newExpiry tim
 	_, err := r.collection.UpdateByID(ctx, id, update)
 	return err
 }
-
-// FindExpired returns theoretically expired files that the worker might need to delete from MinIO (as a fallback, MongoDB deletes them natively via TTL, but we might want pre-empts).
-// But standard design just relies on Mongo TTL streams or polling. If we rely on TTL directly, we need Change Streams. Or poll for things about to expire.
