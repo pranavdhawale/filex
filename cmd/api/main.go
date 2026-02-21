@@ -13,9 +13,11 @@ import (
 	"github.com/pranavdhawale/bytefile/internal/config"
 	"github.com/pranavdhawale/bytefile/internal/database"
 	"github.com/pranavdhawale/bytefile/internal/logger"
+	"github.com/pranavdhawale/bytefile/internal/ratelimit"
 	"github.com/pranavdhawale/bytefile/internal/repository"
 	"github.com/pranavdhawale/bytefile/internal/server"
 	"github.com/pranavdhawale/bytefile/internal/storage"
+	"github.com/pranavdhawale/bytefile/internal/workers"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -100,28 +102,55 @@ func main() {
 	}
 }
 
-// runWorker is a placeholder for running background worker processes
+// runWorker starts the specified background worker process.
 // It blocks until the context is canceled.
 func runWorker(ctx context.Context, workerType string, dbClient *mongo.Client, st *storage.Storage) {
-	// TODO: Initialize specific worker implementations here
+	db := database.GetDatabase(dbClient)
+	fileRepo := repository.NewFileRepository(db)
+	multipartRepo := repository.NewMultipartRepository(db)
 
-	// Block until signal is received
-	<-ctx.Done()
-	slog.Info("Shutting down worker gracefully", "type", workerType)
+	switch workerType {
+	case "expiry":
+		worker := workers.NewExpiryWorker(fileRepo, st, 1*time.Minute)
+		worker.Run(ctx)
+	case "multipart":
+		worker := workers.NewMultipartWorker(multipartRepo, st, 5*time.Minute)
+		worker.Run(ctx)
+	case "gc":
+		worker := workers.NewGCWorker(fileRepo, st, 1*time.Hour)
+		worker.Run(ctx)
+	default:
+		slog.Error("Unknown worker type", "type", workerType)
+		os.Exit(1)
+	}
+
+	slog.Info("Worker stopped gracefully", "type", workerType)
 }
 
 // runAPI starts the HTTP server and manages graceful shutdown
 func runAPI(ctx context.Context, cfg *config.Config, dbClient *mongo.Client, st *storage.Storage) {
+	// Initialize Redis
+	redisClient, err := database.InitRedis(ctx, cfg.RedisURI)
+	if err != nil {
+		slog.Error("Failed to connect to Redis", "error", err)
+		os.Exit(1)
+	}
+	defer redisClient.Close()
+	slog.Info("Successfully connected to Redis")
+
 	// Initialize repositories
 	db := database.GetDatabase(dbClient)
 	fileRepo := repository.NewFileRepository(db)
 	multipartRepo := repository.NewMultipartRepository(db)
 
+	// Initialize Rate Limiter
+	limiter := ratelimit.NewRateLimiter(redisClient)
+
 	// Initialize handlers
 	uploadHandler := api.NewUploadHandler(fileRepo, multipartRepo, st, cfg)
 	downloadHandler := api.NewDownloadHandler(fileRepo, st, cfg)
 
-	srv := server.New(cfg, uploadHandler, downloadHandler)
+	srv := server.New(cfg, uploadHandler, downloadHandler, limiter)
 
 	// Start server in a separate goroutine
 	errChan := make(chan error, 1)
