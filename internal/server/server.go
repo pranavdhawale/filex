@@ -9,6 +9,7 @@ import (
 
 	"github.com/pranavdhawale/bytefile/internal/api"
 	"github.com/pranavdhawale/bytefile/internal/config"
+	"github.com/pranavdhawale/bytefile/internal/ratelimit"
 )
 
 type Server struct {
@@ -16,24 +17,38 @@ type Server struct {
 }
 
 // New creates a new web server configured with standard routes.
-func New(cfg *config.Config, uploadHandler *api.UploadHandler, downloadHandler *api.DownloadHandler) *Server {
+func New(cfg *config.Config, uploadHandler *api.UploadHandler, downloadHandler *api.DownloadHandler, limiter *ratelimit.RateLimiter) *Server {
 	mux := http.NewServeMux()
 
 	// Health and Readiness endpoints
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/ready", readyHandler)
 
-	// API endpoints
-	mux.HandleFunc("POST /upload/init", uploadHandler.HandleInit)
-	mux.HandleFunc("POST /upload/complete", uploadHandler.HandleComplete)
-	mux.HandleFunc("GET /f/{id}", downloadHandler.HandleDownload)
+	// API endpoints (wrapped with rate limits)
+	// POST /upload/init: 10 reqs / 1 min
+	mux.HandleFunc("POST /upload/init", api.RateLimitMiddleware(limiter, "init", 10, time.Minute, uploadHandler.HandleInit))
+
+	// POST /upload/complete: 10 reqs / 1 min
+	mux.HandleFunc("POST /upload/complete", api.RateLimitMiddleware(limiter, "complete", 10, time.Minute, uploadHandler.HandleComplete))
+
+	// GET /f/{id}: 60 reqs / 1 min
+	mux.HandleFunc("GET /f/{id}", api.RateLimitMiddleware(limiter, "download", 60, time.Minute, downloadHandler.HandleDownload))
+
+	// Apply Middleware Stack:
+	// 1. CORS (handle preflight quickly)
+	// 2. RequestLogger (log all incoming requests)
+	// 3. TimeoutMiddleware (15s global timeout to prevent hanging connections)
+	var handler http.Handler = mux
+	handler = api.TimeoutMiddleware(15*time.Second, handler)
+	handler = api.RequestLogger(handler)
+	handler = api.CORSMiddleware(handler)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      mux,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Handler:      handler,
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
 	}
 
 	return &Server{
