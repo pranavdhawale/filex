@@ -11,7 +11,6 @@ type Config struct {
 	MongoURI            string
 	RedisURI            string
 	MinioEndpoint       string // internal (Docker service name) — used by Go server
-	MinioPublicEndpoint string // external (browser-accessible) — used in presigned URLs
 	MinioAccessKey      string
 	MinioSecretKey      string
 	ServerWrapKey       string
@@ -26,7 +25,6 @@ func Load() *Config {
 		MongoURI:            getEnv("MONGO_URI", "mongodb://localhost:27017"),
 		RedisURI:            getEnv("REDIS_URI", "redis://localhost:6379"),
 		MinioEndpoint:       minioEndpoint,
-		MinioPublicEndpoint: getEnv("MINIO_PUBLIC_ENDPOINT", minioEndpoint),
 		MinioAccessKey:      getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinioSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),
 		ServerWrapKey:       getEnv("SWK", "default-swk-for-dev-change-in-prod"),

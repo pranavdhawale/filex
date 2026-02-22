@@ -28,18 +28,23 @@ func New(cfg *config.Config, uploadHandler *api.UploadHandler, downloadHandler *
 	// POST /upload/init: 10 reqs / 1 min
 	mux.HandleFunc("POST /upload/init", api.RateLimitMiddleware(limiter, "init", 10, time.Minute, uploadHandler.HandleInit))
 
+	// POST /upload/chunk: for streaming chunks to MinIO
+	mux.HandleFunc("POST /upload/chunk", api.RateLimitMiddleware(limiter, "upload_chunk", 100, time.Minute, uploadHandler.HandleChunkUpload))
+
 	// POST /upload/complete: 10 reqs / 1 min
 	mux.HandleFunc("POST /upload/complete", api.RateLimitMiddleware(limiter, "complete", 10, time.Minute, uploadHandler.HandleComplete))
 
-	// GET /f/{id}: 60 reqs / 1 min
-	mux.HandleFunc("GET /f/{id}", api.RateLimitMiddleware(limiter, "download", 60, time.Minute, downloadHandler.HandleDownload))
+	// GET /f/{id}: 60 reqs / 1 min (metadata fetch)
+	mux.HandleFunc("GET /f/{id}", api.RateLimitMiddleware(limiter, "download_meta", 60, time.Minute, downloadHandler.HandleDownload))
+
+	// GET /api/download/stream/{id}: actual file streaming
+	mux.HandleFunc("GET /api/download/stream/{id}", downloadHandler.HandleStreamDownload)
 
 	// Apply Middleware Stack:
 	// 1. CORS (handle preflight quickly)
-	// 2. RequestLogger (log all incoming requests)
-	// 3. TimeoutMiddleware (15s global timeout to prevent hanging connections)
+	// 3. TimeoutMiddleware (1 hour for large file transfers)
 	var handler http.Handler = mux
-	handler = api.TimeoutMiddleware(15*time.Second, handler)
+	handler = api.TimeoutMiddleware(1*time.Hour, handler)
 	handler = api.RequestLogger(handler)
 	handler = api.CORSMiddleware(handler)
 
@@ -47,8 +52,8 @@ func New(cfg *config.Config, uploadHandler *api.UploadHandler, downloadHandler *
 		Addr:         ":" + cfg.Port,
 		Handler:      handler,
 		IdleTimeout:  time.Minute,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		ReadTimeout:  1*time.Hour,
+		WriteTimeout: 1*time.Hour,
 	}
 
 	return &Server{

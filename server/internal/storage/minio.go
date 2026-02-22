@@ -1,11 +1,10 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"net/http"
-	"net/url"
-	"time"
+	"io"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -13,73 +12,35 @@ import (
 )
 
 type Storage struct {
-	client         *minio.Client
-	core           *minio.Core
-	publicClient   *minio.Client // used exclusively for generating presigned URLs
-	bucket         string
-	publicEndpoint string
+	client *minio.Client
+	core   *minio.Core
+	bucket string
 }
 
 // NewStorage initializes a new MinIO storage client
 func NewStorage(cfg *config.Config) (*Storage, error) {
-	// Internal client always uses HTTP inside Docker
-	internalOptions := &minio.Options{
+	options := &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
 		Secure: false,
 	}
-
-	client, err := minio.New(cfg.MinioEndpoint, internalOptions)
+	client, err := minio.New(cfg.MinioEndpoint, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create minio client: %w", err)
 	}
 
-	core, err := minio.NewCore(cfg.MinioEndpoint, internalOptions)
+	core, err := minio.NewCore(cfg.MinioEndpoint, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create minio core client: %w", err)
 	}
 
-	// publicClient signs URLs using the browser-facing host.
-	// In production, we MUST use HTTPS for presigned URLs (Mixed Content protection).
-	usePublicSSL := cfg.Environment == "production"
-
-	publicOptions := &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
-		Secure: usePublicSSL,
-		Transport: &localhostRedirectTransport{
-			Base:     http.DefaultTransport,
-			Internal: cfg.MinioEndpoint,
-			Public:   cfg.MinioPublicEndpoint,
-		},
-	}
-
-	publicClient, err := minio.New(cfg.MinioPublicEndpoint, publicOptions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create minio public client: %w", err)
-	}
-
 	return &Storage{
-		client:         client,
-		core:           core,
-		publicClient:   publicClient,
-		bucket:         "files",
-		publicEndpoint: cfg.MinioPublicEndpoint,
+		client: client,
+		core:   core,
+		bucket: "files",
 	}, nil
 }
 
-type localhostRedirectTransport struct {
-	Base     http.RoundTripper
-	Internal string
-	Public   string
-}
-
-func (t *localhostRedirectTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// If the request is going to the public endpoint, redirect it to the internal one
-	if req.URL.Host == t.Public {
-		req.URL.Host = t.Internal
-		req.URL.Scheme = "http" // Internal Docker traffic is always HTTP
-	}
-	return t.Base.RoundTrip(req)
-}
+// localhostRedirectTransport is no longer needed since we are not using publicClient
 
 // CreateMultipartUpload initializes a new multipart upload in MinIO
 func (s *Storage) CreateMultipartUpload(ctx context.Context, objectName string, contentType string) (string, error) {
@@ -92,20 +53,13 @@ func (s *Storage) CreateMultipartUpload(ctx context.Context, objectName string, 
 	return uploadID, nil
 }
 
-// GeneratePresignedPutURL generates a pre-signed URL for a specific part of a multipart upload
-func (s *Storage) GeneratePresignedPutURL(ctx context.Context, objectName, uploadID string, partNumber int) (string, error) {
-	reqParams := make(url.Values)
-	reqParams.Set("uploadId", uploadID)
-	reqParams.Set("partNumber", fmt.Sprint(partNumber))
-
-	expires := 10 * time.Minute
-
-	presignedURL, err := s.publicClient.Presign(ctx, "PUT", s.bucket, objectName, expires, reqParams)
+// PutPart uploads a single part of a multipart upload
+func (s *Storage) PutPart(ctx context.Context, objectName, uploadID string, partNumber int, data []byte) (string, error) {
+	info, err := s.core.PutObjectPart(ctx, s.bucket, objectName, uploadID, partNumber, bytes.NewReader(data), int64(len(data)), minio.PutObjectPartOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
+		return "", fmt.Errorf("failed to put part: %w", err)
 	}
-
-	return presignedURL.String(), nil
+	return info.ETag, nil
 }
 
 // Part represents a completed upload part
@@ -131,14 +85,20 @@ func (s *Storage) CompleteMultipartUpload(ctx context.Context, objectName, uploa
 	return nil
 }
 
-// GenerateSignedGetURL generates a pre-signed URL for downloading an object
-func (s *Storage) GenerateSignedGetURL(ctx context.Context, objectName string, expires time.Duration) (string, error) {
-	presignedURL, err := s.publicClient.PresignedGetObject(ctx, s.bucket, objectName, expires, nil)
+// GetObject returns a reader for the object
+func (s *Storage) GetObject(ctx context.Context, objectName string) (io.ReadCloser, int64, string, error) {
+	obj, err := s.client.GetObject(ctx, s.bucket, objectName, minio.GetObjectOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to generate signed GET URL: %w", err)
+		return nil, 0, "", fmt.Errorf("failed to get object: %w", err)
 	}
 
-	return presignedURL.String(), nil
+	stat, err := obj.Stat()
+	if err != nil {
+		obj.Close()
+		return nil, 0, "", fmt.Errorf("failed to stat object: %w", err)
+	}
+
+	return obj, stat.Size, stat.ContentType, nil
 }
 
 // AbortMultipartUpload cancels a multipart upload and removes uploaded parts

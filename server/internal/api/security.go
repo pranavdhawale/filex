@@ -34,7 +34,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
-		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, ETag")
 
 		// Handle preflight OPTIONS request
 		if r.Method == "OPTIONS" {
