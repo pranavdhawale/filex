@@ -1,35 +1,4 @@
 services:
-  minio:
-    image: minio/minio:latest
-    container_name: bytefile-minio
-    restart: unless-stopped
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
-      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
-      - MINIO_API_CORS_ALLOW_ORIGIN=https://bytefile.pranavdhawale.in
-    command: server /data --console-address ":9001"
-    volumes:
-      - bytefile_minio_data:/data
-    networks:
-      - internal
-      - proxy
-
-  createbuckets:
-    image: minio/mc:latest
-    container_name: bytefile-mc
-    depends_on:
-      - minio
-    networks:
-      - internal
-    entrypoint: >
-      /bin/sh -c "
-      until /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}; do sleep 2; done &&
-      /usr/bin/mc mb myminio/files || true &&
-      /usr/bin/mc anonymous set download myminio/files || true &&
-      printf '<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>PUT</AllowedMethod><AllowedMethod>POST</AllowedMethod><AllowedMethod>DELETE</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><ExposeHeader>ETag</ExposeHeader></CORSRule></CORSConfiguration>' > /tmp/cors.xml &&
-      /usr/bin/mc cors set myminio/files /tmp/cors.xml
-      "
-
   api:
     build:
       context: ./server
@@ -42,7 +11,6 @@ services:
       - MONGO_URI=${MONGO_URI}
       - REDIS_URI=${REDIS_URI}
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_PUBLIC_ENDPOINT=bytefile-files.pranavdhawale.in
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - SWK=${SWK}
@@ -117,6 +85,3 @@ networks:
     external: true
   proxy:
     external: true
-
-volumes:
-  bytefile_minio_data:
