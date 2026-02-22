@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   mongo:
     image: bitnami/mongodb:latest
@@ -53,7 +51,8 @@ services:
       /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin &&
       /usr/bin/mc mb myminio/files || true &&
       /usr/bin/mc anonymous set download myminio/files || true &&
-      /usr/bin/mc bucket cors add myminio/files --origin '*' --method 'GET,PUT,POST,DELETE,HEAD' --expose-header 'ETag'
+      printf '<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>PUT</AllowedMethod><AllowedMethod>POST</AllowedMethod><AllowedMethod>DELETE</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><ExposeHeader>ETag</ExposeHeader></CORSRule></CORSConfiguration>' > /tmp/cors.xml &&
+      /usr/bin/mc cors set myminio/files /tmp/cors.xml
       "
 
   api:
@@ -134,8 +133,12 @@ services:
       - minio
 
   client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8080
     container_name: bytefile-client
-    image: node:20-alpine # just a placeholder if we ever want to run it via docker, but we are running via npm start
     ports:
       - "3000:3000"
     environment:
