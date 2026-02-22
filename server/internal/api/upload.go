@@ -13,7 +13,7 @@ import (
 	"github.com/pranavdhawale/bytefile/internal/models"
 	"github.com/pranavdhawale/bytefile/internal/repository"
 	"github.com/pranavdhawale/bytefile/internal/storage"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 type UploadHandler struct {

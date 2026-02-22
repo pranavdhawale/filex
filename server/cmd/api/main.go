@@ -18,7 +18,7 @@ import (
 	"github.com/pranavdhawale/bytefile/internal/server"
 	"github.com/pranavdhawale/bytefile/internal/storage"
 	"github.com/pranavdhawale/bytefile/internal/workers"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 func main() {
