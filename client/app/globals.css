@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: #000000;
+  color: #eaeaea;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: #3b82f620;
+  color: #eaeaea;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 2px;
+}
+
+/* Remove default focus ring, replace with custom */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 1px solid #3b82f640;
+  outline-offset: 2px;
+}
