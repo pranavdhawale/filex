@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -44,11 +45,10 @@ type InitUploadRequest struct {
 }
 
 type InitUploadResponse struct {
-	FileID        string   `json:"file_id"`
-	UploadID      string   `json:"upload_id"`
-	ChunkSize     int64    `json:"chunk_size"`
-	TotalChunks   int      `json:"total_chunks"`
-	PresignedURLs []string `json:"presigned_urls"`
+	FileID      string `json:"file_id"`
+	UploadID    string `json:"upload_id"`
+	ChunkSize   int64  `json:"chunk_size"`
+	TotalChunks int    `json:"total_chunks"`
 }
 
 func (h *UploadHandler) HandleInit(w http.ResponseWriter, r *http.Request) {
@@ -111,28 +111,52 @@ func (h *UploadHandler) HandleInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate presigned URLs
-	var urls []string
-	for i := 1; i <= totalChunks; i++ {
-		u, err := h.storage.GeneratePresignedPutURL(r.Context(), objectName, uploadID, i)
-		if err != nil {
-			slog.Error("Failed to generate presigned URL", "part", i, "error", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-		urls = append(urls, u)
-	}
-
 	resp := InitUploadResponse{
-		FileID:        fileID,
-		UploadID:      uploadID,
-		ChunkSize:     chunkSize,
-		TotalChunks:   totalChunks,
-		PresignedURLs: urls,
+		FileID:      fileID,
+		UploadID:    uploadID,
+		ChunkSize:   chunkSize,
+		TotalChunks: totalChunks,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func (h *UploadHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request) {
+	fileID := r.URL.Query().Get("file_id")
+	uploadID := r.URL.Query().Get("upload_id")
+	partNumberStr := r.URL.Query().Get("part_number")
+
+	if fileID == "" || uploadID == "" || partNumberStr == "" {
+		http.Error(w, "missing parameters", http.StatusBadRequest)
+		return
+	}
+
+	var partNumber int
+	if _, err := fmt.Sscanf(partNumberStr, "%d", &partNumber); err != nil {
+		http.Error(w, "invalid part number", http.StatusBadRequest)
+		return
+	}
+
+	// Read body (limited to chunk size + overhead)
+	const maxChunkSize = 15 * 1024 * 1024 // 15MB max for a 10MB chunk + overhead
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxChunkSize))
+	if err != nil {
+		slog.Error("Failed to read chunk body", "error", err)
+		http.Error(w, "failed to read body or body too large", http.StatusBadRequest)
+		return
+	}
+
+	objectName := fmt.Sprintf("uploads/%s", fileID)
+	etag, err := h.storage.PutPart(r.Context(), objectName, uploadID, partNumber, data)
+	if err != nil {
+		slog.Error("Failed to upload part to storage", "error", err)
+		http.Error(w, "storage upload failed", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("ETag", etag)
+	w.WriteHeader(http.StatusOK)
 }
 
 type CompleteUploadRequest struct {
