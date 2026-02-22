@@ -33,10 +33,10 @@ services:
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:8080
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
-    # Initialize the default bucket 'files'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -52,11 +52,14 @@ services:
       /bin/sh -c "
       /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin &&
       /usr/bin/mc mb myminio/files || true &&
-      /usr/bin/mc anonymous set download myminio/files || true
+      /usr/bin/mc anonymous set download myminio/files || true &&
+      /usr/bin/mc bucket cors add myminio/files --origin '*' --method 'GET,PUT,POST,DELETE,HEAD' --expose-header 'ETag'
       "
 
   api:
-    build: .
+    build:
+      context: ./server
+      dockerfile: Dockerfile
     container_name: bytefile-api
     ports:
       - "8080:8080"
@@ -66,6 +69,7 @@ services:
       - MONGO_URI=mongodb://mongo:27017/?replicaSet=rs0
       - REDIS_URI=redis://redis:6379
       - MINIO_ENDPOINT=minio:9000
+      - MINIO_PUBLIC_ENDPOINT=localhost:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - SWK=super-secret-wrapper-key
@@ -76,7 +80,9 @@ services:
       - createbuckets
 
   worker-expiry:
-    build: .
+    build:
+      context: ./server
+      dockerfile: Dockerfile
     container_name: bytefile-worker-expiry
     command: ["--worker=expiry"]
     environment:
@@ -92,7 +98,9 @@ services:
       - minio
 
   worker-multipart:
-    build: .
+    build:
+      context: ./server
+      dockerfile: Dockerfile
     container_name: bytefile-worker-multipart
     command: ["--worker=multipart"]
     environment:
@@ -108,7 +116,9 @@ services:
       - minio
 
   worker-gc:
-    build: .
+    build:
+      context: ./server
+      dockerfile: Dockerfile
     container_name: bytefile-worker-gc
     command: ["--worker=gc"]
     environment:
@@ -122,6 +132,16 @@ services:
       - mongo
       - redis
       - minio
+
+  client:
+    container_name: bytefile-client
+    image: node:20-alpine # just a placeholder if we ever want to run it via docker, but we are running via npm start
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    depends_on:
+      - api
 
 volumes:
   mongo_data:
