@@ -3,7 +3,6 @@ export interface InitUploadResponse {
   upload_id: string;
   chunk_size: number;
   total_chunks: number;
-  presigned_urls: string[];
 }
 
 export interface CompleteUploadResponse {

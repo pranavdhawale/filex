@@ -4,7 +4,7 @@
  */
 
 import { generateFEK, encryptChunk, bytesToBase64, wrapFEKWithPassphrase } from "./crypto";
-import { initUpload, completeUpload } from "./api";
+import { initUpload, completeUpload, API_BASE } from "./api";
 import type { UploadOptions, UploadResult, PartInfo } from "@/types";
 
 const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -12,20 +12,22 @@ const MAX_CONCURRENCY = 5;
 const MAX_RETRIES = 3;
 
 async function uploadChunkWithRetry(
-  url: string,
+  fileId: string,
+  uploadId: string,
+  partNumber: number,
   encryptedChunk: Uint8Array,
   retries = MAX_RETRIES
 ): Promise<string> {
+  const url = new URL("/upload/chunk", API_BASE);
+  url.searchParams.set("file_id", fileId);
+  url.searchParams.set("upload_id", uploadId);
+  url.searchParams.set("part_number", partNumber.toString());
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const body: ArrayBuffer = (() => {
-        const buf = new ArrayBuffer(encryptedChunk.byteLength);
-        new Uint8Array(buf).set(encryptedChunk);
-        return buf;
-      })();
-      const res = await fetch(url, {
-        method: "PUT",
-        body,
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        body: encryptedChunk as any,
         headers: { "Content-Type": "application/octet-stream" },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -86,8 +88,12 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
       const plaintext = await slice.arrayBuffer();
       const encrypted = await encryptChunk(plaintext, fek, partNumber);
 
-      const url = init.presigned_urls[chunkIndex];
-      const etag = await uploadChunkWithRetry(url, encrypted);
+      const etag = await uploadChunkWithRetry(
+        init.file_id,
+        init.upload_id,
+        partNumber,
+        encrypted
+      );
 
       parts[chunkIndex] = { part_number: partNumber, etag };
       chunksDone++;

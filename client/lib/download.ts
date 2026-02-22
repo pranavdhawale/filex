@@ -5,7 +5,7 @@
  */
 
 import { decryptChunk, base64ToBytes, unwrapFEKWithPassphrase } from "./crypto";
-import { accessFile } from "./api";
+import { accessFile, API_BASE } from "./api";
 
 const CHUNK_SIZE = 10 * 1024 * 1024; // must match upload chunk size
 const IV_LENGTH = 12; // bytes prepended to each chunk
@@ -34,7 +34,10 @@ export async function startDownload(opts: DownloadOptions): Promise<void> {
   }
 
   // Fetch encrypted blob (streaming)
-  const blobRes = await fetch(meta.download_url);
+  // meta.download_url will be /api/download/stream/{id}
+  const downloadUrl = meta.download_url.startsWith("http") ? meta.download_url : new URL(meta.download_url, API_BASE).toString();
+
+  const blobRes = await fetch(downloadUrl);
   if (!blobRes.ok) throw new Error(`Fetch failed: ${blobRes.status}`);
 
   const contentLength = parseInt(
