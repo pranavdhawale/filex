@@ -1,0 +1,123 @@
+version: "3.8"
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: bytefile-minio
+    restart: unless-stopped
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+      - MINIO_API_CORS_ALLOW_ORIGIN=https://bytefile.pranavdhawale.in
+    command: server /data --console-address ":9001"
+    volumes:
+      - bytefile_minio_data:/data
+    networks:
+      - internal
+      - proxy
+
+  createbuckets:
+    image: minio/mc:latest
+    container_name: bytefile-mc
+    depends_on:
+      - minio
+    networks:
+      - internal
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}; do sleep 2; done &&
+      /usr/bin/mc mb myminio/files || true &&
+      /usr/bin/mc anonymous set download myminio/files || true &&
+      /usr/bin/mc anonymous set public myminio/files || true
+      "
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: bytefile-api
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - ENVIRONMENT=production
+      - MONGO_URI=${MONGO_URI}
+      - REDIS_URI=${REDIS_URI}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_PUBLIC_ENDPOINT=bytefile-files.pranavdhawale.in
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - SWK=${SWK}
+    networks:
+      - internal
+      - proxy
+
+  worker-expiry:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: bytefile-worker-expiry
+    restart: unless-stopped
+    command: ["--worker=expiry"]
+    environment:
+      - ENVIRONMENT=production
+      - MONGO_URI=${MONGO_URI}
+      - REDIS_URI=${REDIS_URI}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    networks:
+      - internal
+
+  worker-multipart:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: bytefile-worker-multipart
+    restart: unless-stopped
+    command: ["--worker=multipart"]
+    environment:
+      - ENVIRONMENT=production
+      - MONGO_URI=${MONGO_URI}
+      - REDIS_URI=${REDIS_URI}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    networks:
+      - internal
+
+  worker-gc:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: bytefile-worker-gc
+    restart: unless-stopped
+    command: ["--worker=gc"]
+    environment:
+      - ENVIRONMENT=production
+      - MONGO_URI=${MONGO_URI}
+      - REDIS_URI=${REDIS_URI}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    networks:
+      - internal
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://bytefile-api.pranavdhawale.in
+    container_name: bytefile-client
+    restart: unless-stopped
+    networks:
+      - proxy
+
+networks:
+  internal:
+    external: true
+  proxy:
+    external: true
+
+volumes:
+  bytefile_minio_data:
