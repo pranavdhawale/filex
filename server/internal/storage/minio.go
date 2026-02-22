@@ -22,28 +22,29 @@ type Storage struct {
 
 // NewStorage initializes a new MinIO storage client
 func NewStorage(cfg *config.Config) (*Storage, error) {
-	useSSL := false // MinIO in docker-compose is typically non-SSL
-
-	options := &minio.Options{
+	// Internal client always uses HTTP inside Docker
+	internalOptions := &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
-		Secure: useSSL,
+		Secure: false,
 	}
-	client, err := minio.New(cfg.MinioEndpoint, options)
+
+	client, err := minio.New(cfg.MinioEndpoint, internalOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create minio client: %w", err)
 	}
 
-	core, err := minio.NewCore(cfg.MinioEndpoint, options)
+	core, err := minio.NewCore(cfg.MinioEndpoint, internalOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create minio core client: %w", err)
 	}
 
-	// publicClient signs URLs using the browser-facing host (e.g. localhost:9000)
-	// We use a custom transport to ensure that if the client tries to connect to localhost:9000
-	// from inside Docker, it gets routed to the internal minio:9000 service.
+	// publicClient signs URLs using the browser-facing host.
+	// In production, we MUST use HTTPS for presigned URLs (Mixed Content protection).
+	usePublicSSL := cfg.Environment == "production"
+
 	publicOptions := &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
-		Secure: useSSL,
+		Secure: usePublicSSL,
 		Transport: &localhostRedirectTransport{
 			Base:     http.DefaultTransport,
 			Internal: cfg.MinioEndpoint,
@@ -75,6 +76,7 @@ func (t *localhostRedirectTransport) RoundTrip(req *http.Request) (*http.Respons
 	// If the request is going to the public endpoint, redirect it to the internal one
 	if req.URL.Host == t.Public {
 		req.URL.Host = t.Internal
+		req.URL.Scheme = "http" // Internal Docker traffic is always HTTP
 	}
 	return t.Base.RoundTrip(req)
 }
