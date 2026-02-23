@@ -33,11 +33,60 @@ func NewStorage(cfg *config.Config) (*Storage, error) {
 		return nil, fmt.Errorf("failed to create minio core client: %w", err)
 	}
 
-	return &Storage{
+	s := &Storage{
 		client: client,
 		core:   core,
-		bucket: "files",
-	}, nil
+		bucket: cfg.MinioBucket,
+	}
+
+	// Ensure bucket exists and has the correct policy
+	if err := s.ensureBucket(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to ensure bucket %s: %w", s.bucket, err)
+	}
+
+	return s, nil
+}
+
+// ensureBucket checks if the bucket exists, creates it if not, and sets policy.
+func (s *Storage) ensureBucket(ctx context.Context) error {
+	exists, err := s.client.BucketExists(ctx, s.bucket)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		err = s.client.MakeBucket(ctx, s.bucket, minio.MakeBucketOptions{})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Set anonymous download policy
+	// This is equivalent to `mc anonymous set download`
+	policy := fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+				"Effect": "Allow",
+				"Principal": {"AWS": ["*"]},
+				"Resource": ["arn:aws:s3:::%s"]
+			},
+			{
+				"Action": ["s3:GetObject"],
+				"Effect": "Allow",
+				"Principal": {"AWS": ["*"]},
+				"Resource": ["arn:aws:s3:::%s/*"]
+			}
+		]
+	}`, s.bucket, s.bucket)
+
+	err = s.client.SetBucketPolicy(ctx, s.bucket, policy)
+	if err != nil {
+		return fmt.Errorf("failed to set bucket policy: %w", err)
+	}
+
+	return nil
 }
 
 // localhostRedirectTransport is no longer needed since we are not using publicClient
