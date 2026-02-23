@@ -5,15 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: bytefile-api
     restart: unless-stopped
-    environment:
-      - PORT=8080
-      - ENVIRONMENT=production
-      - MONGO_URI=${MONGO_URI}
-      - REDIS_URI=${REDIS_URI}
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
-      - SWK=${SWK}
+    env_file:
+      - /srv/docker/secrets/bytefile.env
     networks:
       - internal
       - proxy
@@ -25,13 +18,8 @@ services:
     container_name: bytefile-worker-expiry
     restart: unless-stopped
     command: ["--worker=expiry"]
-    environment:
-      - ENVIRONMENT=production
-      - MONGO_URI=${MONGO_URI}
-      - REDIS_URI=${REDIS_URI}
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    env_file:
+      - /srv/docker/secrets/bytefile.env
     networks:
       - internal
 
@@ -42,13 +30,8 @@ services:
     container_name: bytefile-worker-multipart
     restart: unless-stopped
     command: ["--worker=multipart"]
-    environment:
-      - ENVIRONMENT=production
-      - MONGO_URI=${MONGO_URI}
-      - REDIS_URI=${REDIS_URI}
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    env_file:
+      - /srv/docker/secrets/bytefile.env
     networks:
       - internal
 
@@ -59,13 +42,8 @@ services:
     container_name: bytefile-worker-gc
     restart: unless-stopped
     command: ["--worker=gc"]
-    environment:
-      - ENVIRONMENT=production
-      - MONGO_URI=${MONGO_URI}
-      - REDIS_URI=${REDIS_URI}
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    env_file:
+      - /srv/docker/secrets/bytefile.env
     networks:
       - internal
 
