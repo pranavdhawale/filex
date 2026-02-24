@@ -4,12 +4,12 @@ import Particles from "@/components/Particles";
 import { AppShell } from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "FileX — Encrypted File Sharing",
+  title: "FileX",
   description:
     "End-to-end encrypted, anonymous file sharing. Server never sees your data.",
   metadataBase: new URL("https://filex.app"),
   openGraph: {
-    title: "FileX — Encrypted File Sharing",
+    title: "FileX",
     description: "Share files with zero knowledge encryption.",
     type: "website",
   },
