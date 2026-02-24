@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pranavdhawale/bytefile/internal/config"
-	"github.com/pranavdhawale/bytefile/internal/crypto"
-	"github.com/pranavdhawale/bytefile/internal/models"
-	"github.com/pranavdhawale/bytefile/internal/repository"
-	"github.com/pranavdhawale/bytefile/internal/storage"
+	"github.com/pranavdhawale/filex/internal/config"
+	"github.com/pranavdhawale/filex/internal/crypto"
+	"github.com/pranavdhawale/filex/internal/models"
+	"github.com/pranavdhawale/filex/internal/repository"
+	"github.com/pranavdhawale/filex/internal/storage"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 

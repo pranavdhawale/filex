@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 }
 
@@ -9,13 +9,24 @@
   box-sizing: border-box;
 }
 
+
+
 html,
 body {
   background: #000000;
   color: #eaeaea;
   font-family: var(--font-sans);
+  font-weight: 400;
+  line-height: 1.55;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1 {
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
 ::selection {

@@ -1,7 +1,7 @@
 services:
   mongo:
     image: bitnami/mongodb:latest
-    container_name: bytefile-mongo
+    container_name: filex-mongo
     ports:
       - "27017:27017"
     environment:
@@ -18,13 +18,13 @@ services:
 
   redis:
     image: redis:latest
-    container_name: bytefile-redis
+    container_name: filex-redis
     ports:
       - "6379:6379"
 
   minio:
     image: minio/minio:latest
-    container_name: bytefile-minio
+    container_name: filex-minio
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -45,7 +45,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: bytefile-api
+    container_name: filex-api
     ports:
       - "8080:8080"
     environment:
@@ -55,20 +55,23 @@ services:
       - REDIS_URI=redis://redis:6379
       - MINIO_ENDPOINT=minio:9000
       - MINIO_PUBLIC_ENDPOINT=localhost:9000
-      - MINIO_BUCKET=bytefile
+      - MINIO_BUCKET=filex
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - SWK=super-secret-wrapper-key
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
 
   worker-expiry:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: bytefile-worker-expiry
+    container_name: filex-worker-expiry
     command: ["--worker=expiry"]
     environment:
       - ENVIRONMENT=development
@@ -78,15 +81,18 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
 
   worker-multipart:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: bytefile-worker-multipart
+    container_name: filex-worker-multipart
     command: ["--worker=multipart"]
     environment:
       - ENVIRONMENT=development
@@ -96,15 +102,18 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
 
   worker-gc:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: bytefile-worker-gc
+    container_name: filex-worker-gc
     command: ["--worker=gc"]
     environment:
       - ENVIRONMENT=development
@@ -114,23 +123,29 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
 
   client:
     build:
       context: ./client
-      dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8080
-    container_name: bytefile-client
+      target: development
+    container_name: filex-client
     ports:
       - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+      - /app/.next
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8080
     depends_on:
-      - api
+      api:
+        condition: service_started
 
 volumes:
   mongo_data:

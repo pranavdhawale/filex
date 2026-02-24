@@ -3,10 +3,10 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: bytefile-api
+    container_name: filex-api
     restart: unless-stopped
     env_file:
-      - /srv/docker/secrets/bytefile.env
+      - /srv/docker/secrets/filex.env
     networks:
       - internal
       - proxy
@@ -15,11 +15,11 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: bytefile-worker-expiry
+    container_name: filex-worker-expiry
     restart: unless-stopped
     command: ["--worker=expiry"]
     env_file:
-      - /srv/docker/secrets/bytefile.env
+      - /srv/docker/secrets/filex.env
     networks:
       - internal
 
@@ -27,11 +27,11 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: bytefile-worker-multipart
+    container_name: filex-worker-multipart
     restart: unless-stopped
     command: ["--worker=multipart"]
     env_file:
-      - /srv/docker/secrets/bytefile.env
+      - /srv/docker/secrets/filex.env
     networks:
       - internal
 
@@ -39,11 +39,11 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: bytefile-worker-gc
+    container_name: filex-worker-gc
     restart: unless-stopped
     command: ["--worker=gc"]
     env_file:
-      - /srv/docker/secrets/bytefile.env
+      - /srv/docker/secrets/filex.env
     networks:
       - internal
 
@@ -52,8 +52,8 @@ services:
       context: ./client
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=https://bytefile-api.pranavdhawale.in
-    container_name: bytefile-client
+        - NEXT_PUBLIC_API_URL=https://filex-api.pranavdhawale.in
+    container_name: filex-client
     restart: unless-stopped
     networks:
       - proxy

@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pranavdhawale/bytefile/internal/api"
-	"github.com/pranavdhawale/bytefile/internal/config"
-	"github.com/pranavdhawale/bytefile/internal/ratelimit"
+	"github.com/pranavdhawale/filex/internal/api"
+	"github.com/pranavdhawale/filex/internal/config"
+	"github.com/pranavdhawale/filex/internal/ratelimit"
 )
 
 type Server struct {

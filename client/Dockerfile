@@ -1,3 +1,16 @@
+# Development stage — used by docker-compose.dev.yml
+FROM node:20-alpine AS development
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]
+
 # Build stage
 FROM node:20-alpine AS builder
 

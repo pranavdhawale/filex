@@ -26,7 +26,7 @@ func Load() *Config {
 		MongoURI:            getEnv("MONGO_URI", "mongodb://localhost:27017"),
 		RedisURI:            getEnv("REDIS_URI", "redis://localhost:6379"),
 		MinioEndpoint:       minioEndpoint,
-		MinioBucket:         getEnv("MINIO_BUCKET", "bytefile"),
+		MinioBucket:         getEnv("MINIO_BUCKET", "filex"),
 		MinioAccessKey:      getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinioSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),
 		ServerWrapKey:       getEnv("SWK", "default-swk-for-dev-change-in-prod"),
