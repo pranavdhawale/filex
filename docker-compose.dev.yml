@@ -60,9 +60,12 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - SWK=super-secret-wrapper-key
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
 
   worker-expiry:
     build:
@@ -78,9 +81,12 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
 
   worker-multipart:
     build:
@@ -96,9 +102,12 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
 
   worker-gc:
     build:
@@ -114,9 +123,12 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
     depends_on:
-      - mongo
-      - redis
-      - minio
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
 
   client:
     build:
@@ -132,7 +144,8 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8080
     depends_on:
-      - api
+      api:
+        condition: service_started
 
 volumes:
   mongo_data:
