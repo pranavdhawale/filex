@@ -1,12 +1,30 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 }
 
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px; /* Base — matches notex */
+}
+
+@media (max-width: 640px) {
+  html { font-size: 14px; }
+}
+
+@media (min-width: 1280px) {
+  html { font-size: 17px; }
+}
+
+@media (min-width: 1536px) {
+  html { font-size: 18px; }
 }
 
 html,
@@ -14,8 +32,17 @@ body {
   background: #000000;
   color: #eaeaea;
   font-family: var(--font-sans);
+  font-weight: 400;
+  line-height: 1.55;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1 {
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
 ::selection {
