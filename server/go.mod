@@ -1,4 +1,4 @@
-module github.com/pranavdhawale/bytefile
+module github.com/pranavdhawale/filex
 
 go 1.26
 

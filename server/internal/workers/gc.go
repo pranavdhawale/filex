@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/pranavdhawale/bytefile/internal/repository"
-	"github.com/pranavdhawale/bytefile/internal/storage"
+	"github.com/pranavdhawale/filex/internal/repository"
+	"github.com/pranavdhawale/filex/internal/storage"
 )
 
 // GCWorker iterates over all objects in MinIO and checks if they exist

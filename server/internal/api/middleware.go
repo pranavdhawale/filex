@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pranavdhawale/bytefile/internal/ratelimit"
+	"github.com/pranavdhawale/filex/internal/ratelimit"
 )
 
 // extractIP attempts to find the true client IP from common proxy headers,

@@ -63,7 +63,7 @@ export default function HomePage() {
       <div className="w-full max-w-lg space-y-8">
         {/* Header */}
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">Bytefile</h1>
+          <h1 className="text-xl font-semibold tracking-tight">FileX</h1>
           <p className="text-sm text-[#888]">
             End-to-end encrypted file sharing. Server sees nothing.
           </p>

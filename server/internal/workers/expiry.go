@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/pranavdhawale/bytefile/internal/repository"
-	"github.com/pranavdhawale/bytefile/internal/storage"
+	"github.com/pranavdhawale/filex/internal/repository"
+	"github.com/pranavdhawale/filex/internal/storage"
 )
 
 // ExpiryWorker periodically checks for expired files, deletes them from MinIO,

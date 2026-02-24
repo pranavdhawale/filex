@@ -8,7 +8,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/pranavdhawale/bytefile/internal/config"
+	"github.com/pranavdhawale/filex/internal/config"
 )
 
 type Storage struct {

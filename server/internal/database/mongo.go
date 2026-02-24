@@ -34,9 +34,9 @@ func Close(ctx context.Context, client *mongo.Client) error {
 	return client.Disconnect(ctx)
 }
 
-// GetDatabase returns the bytefile database instance.
+// GetDatabase returns the filex database instance.
 func GetDatabase(client *mongo.Client) *mongo.Database {
-	return client.Database("bytefile")
+	return client.Database("filex")
 }
 
 // ContextWithTimeout is a helper for repos.
