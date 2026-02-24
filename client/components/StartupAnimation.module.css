@@ -20,19 +20,20 @@
   align-items: baseline;
   justify-content: center;
   font-family: "Inter", system-ui, sans-serif;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -1.5px;
 }
 
-/* "Byte" — slides in from left, initially hidden */
+/* "File" — slides in from left, initially hidden */
 .prefix {
-  font-size: 3.5rem;
+  font-size: 3.5rem; /* Fixed size */
   opacity: 0;
-  width: 0;
+  max-width: 0; /* Use max-width for smoother transition than width */
   overflow: hidden;
   white-space: nowrap;
-  transform: translateX(-20px);
+  transform: translateX(-20px) translateZ(0); /* Force GPU */
   transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity, max-width;
 
   /* White → #4B006E gradient, matching the suffix final state */
   background: linear-gradient(to right, #ffffff, #4b006e);
@@ -43,15 +44,17 @@
 
 .prefix.prefixVisible {
   opacity: 1;
-  width: auto;
-  transform: translateX(0);
+  max-width: 200px; /* Arbitrary large enough width */
+  transform: translateX(0) translateZ(0);
 }
 
-/* "file" — starts huge and purple, shrinks to match logo size */
+/* "X" — fixed font size, scaled down using transform */
 .suffix {
-  font-size: 10rem;
+  font-size: 3.5rem; /* Native size, we scale it UP initially */
+  transform: scale(2.8) translateZ(0); /* 3.5 * 2.8 ≈ 10rem. Force GPU */
+  transform-origin: center;
   transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  transform: scale(1);
+  will-change: transform, filter;
 
   background: linear-gradient(135deg, #9b30c0 0%, #4b006e 100%);
   background-clip: text;
@@ -61,6 +64,6 @@
 }
 
 .suffix.suffixShrunk {
-  font-size: 3.5rem;
+  transform: scale(1) translateZ(0);
   filter: drop-shadow(0 0 10px rgba(75, 0, 110, 0.3));
 }
