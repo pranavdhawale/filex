@@ -1,0 +1,27 @@
+.particlesContainer {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0; /* Behind everything */
+  pointer-events: none; /* Let clicks pass through */
+}
+
+/*
+  Strategy for layering:
+  - Particles at z-index 0 (background)
+  - Page content at z-index 1+ (foreground)
+  - Mouse movement is captured via window listener, so pointer-events: none
+    on the canvas does not break hover interactions.
+*/
+
+.global-particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
