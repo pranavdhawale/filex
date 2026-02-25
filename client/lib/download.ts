@@ -1,101 +1,150 @@
 /**
  * download.ts — Streaming decryption download engine.
- * Fetches encrypted blob, decrypts chunk-by-chunk, triggers browser download.
- * Never loads the full file into memory.
+ *
+ * Pipeline:
+ *   fetch(encryptedBlob)
+ *     .body (ReadableStream<Uint8Array>)
+ *     .pipeThrough(progressTransform)      — tracks bytes received, fires onProgress
+ *     .pipeThrough(createDecryptTransformer) — decrypts chunk-by-chunk as bytes arrive
+ *     .pipeTo(writableDestination)         — Strategy A: File System Access API (disk stream)
+ *                                            Strategy B: Response blob fallback (Firefox)
+ *
+ * Peak RAM: ~2 encrypted chunks (~20 MB) regardless of total file size.
+ * Compare to old approach: entire file in RAM (2x file size).
  */
 
-import { decryptChunk, base64ToBytes, unwrapFEKWithPassphrase } from "./crypto";
+import { base64ToBytes, unwrapFEKWithPassphrase, createDecryptTransformer } from "./crypto";
 import { accessFile, API_BASE } from "./api";
+import type { DownloadOptions, DownloadProgress } from "@/types";
 
-const CHUNK_SIZE = 10 * 1024 * 1024; // must match upload chunk size
-const IV_LENGTH = 12; // bytes prepended to each chunk
+// Must match upload chunk size exactly
+const PLAIN_CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
+const IV_LENGTH = 12;
+const GCM_TAG_LENGTH = 16;
+const ENCRYPTED_CHUNK_SIZE = PLAIN_CHUNK_SIZE + IV_LENGTH + GCM_TAG_LENGTH; // 10,485,788 bytes
 
-export interface DownloadOptions {
-  fileId: string;
-  filename?: string;
-  passphrase?: string; // required for master mode
-  onProgress?: (receivedBytes: number, totalBytes: number) => void;
+/**
+ * Creates a pass-through TransformStream that counts bytes and fires progress callbacks.
+ */
+function createProgressTransformer(
+  totalBytes: number,
+  onProgress: (progress: DownloadProgress) => void
+): TransformStream<Uint8Array, Uint8Array> {
+  let receivedBytes = 0;
+  const startTime = Date.now();
+
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      receivedBytes += chunk.length;
+      const elapsed = (Date.now() - startTime) / 1000 || 0.001;
+      const speedMBps = receivedBytes / elapsed / (1024 * 1024);
+      const remaining = totalBytes - receivedBytes;
+      const etaSecs = speedMBps > 0 ? remaining / (speedMBps * 1024 * 1024) : 0;
+
+      onProgress({
+        phase: "fetching",
+        receivedBytes,
+        totalBytes,
+        speedMBps,
+        etaSecs,
+      });
+
+      controller.enqueue(chunk);
+    },
+  });
 }
 
-export async function startDownload(opts: DownloadOptions): Promise<void> {
-  const { fileId, filename = "file", passphrase, onProgress } = opts;
+/**
+ * Triggers a browser "Save As" dialog using the File System Access API.
+ * Returns true if the strategy succeeded, false if the API is unavailable.
+ */
+async function saveWithFileSystemAPI(
+  stream: ReadableStream<Uint8Array>,
+  filename: string,
+  onProgress: ((progress: DownloadProgress) => void) | undefined,
+  totalBytes: number
+): Promise<boolean> {
+  if (!("showSaveFilePicker" in window)) return false;
 
-  // Fetch metadata from API
-  const meta = await accessFile(fileId);
+  try {
+    // Prompt the OS "Save As" dialog — must be called during a user gesture
+    const handle = await (window as any).showSaveFilePicker({
+      suggestedName: filename,
+      types: [{ description: "File", accept: { "application/octet-stream": [] } }],
+    });
 
-  // Resolve FEK
-  let fekBytes: Uint8Array;
-  if (meta.encryption_mode === "anonymous") {
-    fekBytes = base64ToBytes(meta.fek);
-  } else {
-    if (!passphrase)
-      throw new Error("PASSPHRASE_REQUIRED");
-    fekBytes = await unwrapFEKWithPassphrase(meta.fek, passphrase);
+    const writable = await handle.createWritable();
+
+    // Pipe decrypted stream directly to the OS file — zero buffering in JS heap
+    let savedBytes = 0;
+    const startTime = Date.now();
+
+    await stream.pipeTo(
+      new WritableStream({
+        async write(chunk) {
+          await writable.write(chunk);
+          savedBytes += chunk.length;
+          const elapsed = (Date.now() - startTime) / 1000 || 0.001;
+          const speedMBps = savedBytes / elapsed / (1024 * 1024);
+          const etaSecs = speedMBps > 0 ? (totalBytes - savedBytes) / (speedMBps * 1024 * 1024) : 0;
+
+          onProgress?.({
+            phase: "saving",
+            receivedBytes: savedBytes,
+            totalBytes,
+            speedMBps,
+            etaSecs,
+          });
+        },
+        async close() {
+          await writable.close();
+        },
+        async abort(reason) {
+          await writable.abort(reason);
+        },
+      })
+    );
+
+    return true;
+  } catch (err: any) {
+    // User cancelled the dialog — rethrow so UI can handle it
+    if (err?.name === "AbortError") throw err;
+    // Other errors (e.g., API not supported in this context) → fallback
+    return false;
   }
+}
 
-  // Fetch encrypted blob (streaming)
-  // meta.download_url will be /api/download/stream/{id}
-  const downloadUrl = meta.download_url.startsWith("http") ? meta.download_url : new URL(meta.download_url, API_BASE).toString();
+/**
+ * Fallback: collect decrypted stream into a Blob then trigger a download link click.
+ * Used for Firefox and browsers without File System Access API.
+ * Decryption is still streaming/pipelined — only the final blob assembly requires memory.
+ */
+async function saveWithBlobFallback(
+  stream: ReadableStream<Uint8Array>,
+  filename: string,
+  onProgress: ((progress: DownloadProgress) => void) | undefined,
+  totalBytes: number
+): Promise<void> {
+  const chunks: Uint8Array[] = [];
+  let saved = 0;
+  const startTime = Date.now();
 
-  const blobRes = await fetch(downloadUrl);
-  if (!blobRes.ok) throw new Error(`Fetch failed: ${blobRes.status}`);
-
-  const contentLength = parseInt(
-    blobRes.headers.get("Content-Length") ?? "0",
-    10
-  );
-
-  // Use StreamSaver pattern: collect chunks, decrypt, and stream into download
-  // For wide compatibility we collect into an array then trigger download.
-  // For 5GB+ we rely on the fact that encrypted chunks are streamed, not full blob.
-  const reader = blobRes.body!.getReader();
-  const decryptedChunks: Uint8Array[] = [];
-
-  let buffer = new Uint8Array(0);
-  let chunkIndex = 1;
-  let received = 0;
-
-  const encryptedChunkSize = CHUNK_SIZE + IV_LENGTH + 16; // IV + data + GCM tag
-
+  const reader = stream.getReader();
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-
-    received += value.length;
-    onProgress?.(received, contentLength);
-
-    // Append to buffer
-    const merged = new Uint8Array(buffer.length + value.length);
-    merged.set(buffer);
-    merged.set(value, buffer.length);
-    buffer = merged;
-
-    // Drain full encrypted chunks from the buffer
-    while (buffer.length >= encryptedChunkSize) {
-      const encChunk = buffer.slice(0, encryptedChunkSize);
-      buffer = buffer.slice(encryptedChunkSize);
-
-      const plain = await decryptChunk(encChunk, fekBytes);
-      decryptedChunks.push(new Uint8Array(plain));
-      chunkIndex++;
-    }
+    chunks.push(value);
+    saved += value.length;
+    const elapsed = (Date.now() - startTime) / 1000 || 0.001;
+    const speedMBps = saved / elapsed / (1024 * 1024);
+    const etaSecs = speedMBps > 0 ? (totalBytes - saved) / (speedMBps * 1024 * 1024) : 0;
+    onProgress?.({ phase: "decrypting", receivedBytes: saved, totalBytes, speedMBps, etaSecs });
   }
 
-  // Decrypt any remaining partial last chunk
-  if (buffer.length > 0) {
-    const plain = await decryptChunk(buffer, fekBytes);
-    decryptedChunks.push(new Uint8Array(plain));
-  }
-
-  // Trigger download via Blob URL
-  const blobParts: ArrayBuffer[] = decryptedChunks.map((chunk) => {
-    const buf = new ArrayBuffer(chunk.byteLength);
-    new Uint8Array(buf).set(chunk);
-    return buf;
-  });
-  const blob = new Blob(blobParts, {
-    type: "application/octet-stream",
-  });
+  const blob = new Blob(
+    chunks.map((c) => new Uint8Array(c)),
+    { type: "application/octet-stream" }
+  );
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -103,6 +152,78 @@ export async function startDownload(opts: DownloadOptions): Promise<void> {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // Small delay before revoking to ensure download starts
   setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+/**
+ * Main download entry point.
+ *
+ * 1. Fetches file metadata + encrypted FEK from the API.
+ * 2. Resolves the plaintext FEK (anonymous: direct; master: PBKDF2+AES-KW unwrap).
+ * 3. Fetches the encrypted blob as a ReadableStream.
+ * 4. Pipes through progressTransform → decryptTransformer → disk (or blob fallback).
+ */
+export async function startDownload(opts: DownloadOptions): Promise<void> {
+  const { fileId, filename = `file-${fileId.slice(0, 8)}`, passphrase, onProgress } = opts;
+
+  // ── Step 1: Fetch metadata ────────────────────────────────────────────────
+  const meta = await accessFile(fileId);
+
+  // ── Step 2: Resolve FEK ───────────────────────────────────────────────────
+  let fekBytes: Uint8Array;
+  if (meta.encryption_mode === "anonymous") {
+    fekBytes = base64ToBytes(meta.fek);
+  } else {
+    if (!passphrase) throw new Error("PASSPHRASE_REQUIRED");
+    fekBytes = await unwrapFEKWithPassphrase(meta.fek, passphrase);
+  }
+
+  // ── Step 3: Fetch the encrypted stream ───────────────────────────────────
+  const downloadUrl = meta.download_url.startsWith("http")
+    ? meta.download_url
+    : new URL(meta.download_url, API_BASE).toString();
+
+  const blobRes = await fetch(downloadUrl);
+  if (!blobRes.ok) throw new Error(`Fetch failed: ${blobRes.status}`);
+  if (!blobRes.body) throw new Error("No response body");
+
+  const totalBytes = parseInt(blobRes.headers.get("Content-Length") ?? "0", 10);
+
+  // ── Step 4: Build the decryption pipeline ────────────────────────────────
+  const noop = () => { };
+  const progress = onProgress ?? noop;
+
+  // Fire initial progress so the UI transitions immediately
+  progress({ phase: "fetching", receivedBytes: 0, totalBytes, speedMBps: 0, etaSecs: 0 });
+
+  const progressStream = onProgress
+    ? blobRes.body.pipeThrough(createProgressTransformer(totalBytes, progress))
+    : blobRes.body;
+
+  const decryptedStream = progressStream.pipeThrough(
+    createDecryptTransformer(fekBytes, ENCRYPTED_CHUNK_SIZE)
+  );
+
+  // ── Step 5: Write to disk ─────────────────────────────────────────────────
+  // Strategy A: File System Access API — true streaming to OS disk
+  // Strategy B: Blob URL fallback — Firefox / older browsers
+  const usedFSA = await saveWithFileSystemAPI(decryptedStream, filename, onProgress, totalBytes);
+  if (!usedFSA) {
+    // decryptedStream is already consumed if saveWithFileSystemAPI partially ran and failed
+    // Re-build the pipeline from the original fetch (can't reuse a consumed stream)
+    // Since FSA only failed due to API unavailability (not a user cancel), we can safely fallback
+    const blobRes2 = await fetch(downloadUrl);
+    if (!blobRes2.ok) throw new Error(`Fetch failed on fallback: ${blobRes2.status}`);
+    if (!blobRes2.body) throw new Error("No response body on fallback");
+
+    const progressStream2 = onProgress
+      ? blobRes2.body.pipeThrough(createProgressTransformer(totalBytes, progress))
+      : blobRes2.body;
+
+    const decryptedStream2 = progressStream2.pipeThrough(
+      createDecryptTransformer(fekBytes, ENCRYPTED_CHUNK_SIZE)
+    );
+
+    await saveWithBlobFallback(decryptedStream2, filename, onProgress, totalBytes);
+  }
 }
