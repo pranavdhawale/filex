@@ -4,7 +4,7 @@ import { useState, use } from "react";
 import { Download, Loader2, AlertCircle, Lock } from "lucide-react";
 import { startDownload } from "@/lib/download";
 import { accessFile } from "@/lib/api";
-import type { AccessFileResponse } from "@/types";
+import type { AccessFileResponse, DownloadProgress } from "@/types";
 
 type Phase = "loading" | "prompt" | "ready" | "downloading" | "error" | "expired";
 
@@ -18,7 +18,7 @@ export default function DownloadPage({
   const [meta, setMeta] = useState<AccessFileResponse | null>(null);
   const [passphrase, setPassphrase] = useState("");
   const [passphraseError, setPassphraseError] = useState<string | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<{ received: number; total: number } | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch metadata on mount — we do it on user interaction to avoid bots hammering the API
@@ -52,9 +52,9 @@ export default function DownloadPage({
     try {
       await startDownload({
         fileId: id,
+        filename: `file-${id.slice(0, 8)}`,
         passphrase: meta.encryption_mode === "master" ? passphrase : undefined,
-        onProgress: (received, total) =>
-          setDownloadProgress({ received, total }),
+        onProgress: (progress) => setDownloadProgress(progress),
       });
       setPhase("ready");
     } catch (err) {
@@ -70,9 +70,23 @@ export default function DownloadPage({
   };
 
   const pct =
-    downloadProgress && downloadProgress.total > 0
-      ? Math.round((downloadProgress.received / downloadProgress.total) * 100)
+    downloadProgress && downloadProgress.totalBytes > 0
+      ? Math.round((downloadProgress.receivedBytes / downloadProgress.totalBytes) * 100)
       : 0;
+
+  const phaseLabel: Record<string, string> = {
+    fetching: "Fetching",
+    decrypting: "Decrypting",
+    saving: "Saving",
+  };
+
+  const speedLabel = downloadProgress && downloadProgress.speedMBps > 0
+    ? ` — ${downloadProgress.speedMBps.toFixed(1)} MB/s`
+    : "";
+
+  const etaLabel = downloadProgress && downloadProgress.etaSecs > 1
+    ? ` (${Math.ceil(downloadProgress.etaSecs)}s left)`
+    : "";
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
@@ -164,7 +178,9 @@ export default function DownloadPage({
               <div className="flex items-center gap-2">
                 <Loader2 size={14} className="animate-spin text-blue-400" />
                 <span className="text-sm text-white/70">
-                  {downloadProgress ? `Decrypting — ${pct}%` : "Fetching encrypted file…"}
+                  {downloadProgress
+                    ? `${phaseLabel[downloadProgress.phase] ?? "Working"} — ${pct}%${speedLabel}${etaLabel}`
+                    : "Starting…"}
                 </span>
               </div>
               {downloadProgress && (
