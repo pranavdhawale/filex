@@ -118,11 +118,8 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-xs text-[#333]">
-          Files are encrypted in your browser before leaving your device.
-        </p>
       </div>
+
     </main>
   );
 }
