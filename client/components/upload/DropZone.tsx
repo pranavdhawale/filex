@@ -94,7 +94,10 @@ export default function DropZone({ onFileSelected, disabled }: DropZoneProps) {
           <span className="text-blue-400 font-medium">Choose a file</span>
           {" or drag and drop"}
         </p>
-        <p className="text-xs text-[#555] mt-1">Any file, up to 5 GB</p>
+        <p className="text-xs text-[#555] mt-1 mb-2">Any file, up to 5 GB</p>
+        <p className="text-[10px] text-[#444] mt-2 border-t border-[#1a1a1a] pt-2 max-w-[200px] mx-auto leading-relaxed">
+          Files are encrypted in your browser before leaving your device.
+        </p>
       </div>
     </label>
   );
