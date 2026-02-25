@@ -48,3 +48,20 @@ export interface PartInfo {
   part_number: number;
   etag: string;
 }
+
+export type DownloadPhase = "fetching" | "decrypting" | "saving";
+
+export interface DownloadProgress {
+  phase: DownloadPhase;
+  receivedBytes: number;
+  totalBytes: number;
+  speedMBps: number;
+  etaSecs: number;
+}
+
+export interface DownloadOptions {
+  fileId: string;
+  filename?: string;
+  passphrase?: string;
+  onProgress?: (progress: DownloadProgress) => void;
+}

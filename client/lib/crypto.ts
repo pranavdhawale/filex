@@ -154,3 +154,74 @@ export async function unwrapFEKWithPassphrase(
   const raw = await crypto.subtle.exportKey("raw", fekKey);
   return new Uint8Array(raw);
 }
+
+/**
+ * createDecryptTransformer — returns a TransformStream that:
+ * - Accepts a raw stream of encrypted bytes (ReadableStream<Uint8Array>)
+ * - Buffers incoming bytes until a full encrypted chunk is available
+ * - Decrypts each chunk with AES-256-GCM as it arrives (streaming pipeline)
+ * - Outputs decrypted plaintext Uint8Array chunks
+ *
+ * Encrypted chunk layout (per chunk):
+ *   [ IV (12 bytes) | ciphertext (CHUNK_SIZE bytes) | GCM tag (16 bytes) ]
+ *   = CHUNK_SIZE + 28 bytes total
+ *
+ * The last chunk may be smaller (partial file). flush() handles it.
+ */
+export function createDecryptTransformer(
+  fekBytes: Uint8Array,
+  encryptedChunkSize: number // e.g. 10*1024*1024 + 12 + 16
+): TransformStream<Uint8Array, Uint8Array> {
+  // Internal rolling buffer of bytes not yet decrypted
+  let buffer = new Uint8Array(0);
+
+  const appendToBuffer = (incoming: Uint8Array) => {
+    const merged = new Uint8Array(buffer.length + incoming.length);
+    merged.set(buffer, 0);
+    merged.set(incoming, buffer.length);
+    buffer = merged;
+  };
+
+  const decryptOne = async (chunk: Uint8Array): Promise<Uint8Array> => {
+    const iv = chunk.slice(0, IV_LENGTH);
+    const ciphertext = chunk.slice(IV_LENGTH);
+    const key = await importFEK(fekBytes, "decrypt");
+    const plain = await crypto.subtle.decrypt(
+      { name: ALGORITHM, iv: toBuffer(iv) },
+      key,
+      toBuffer(ciphertext)
+    );
+    return new Uint8Array(plain);
+  };
+
+  return new TransformStream<Uint8Array, Uint8Array>({
+    async transform(incoming, controller) {
+      appendToBuffer(incoming);
+
+      // Drain all complete encrypted chunks from the buffer
+      while (buffer.length >= encryptedChunkSize) {
+        const encChunk = buffer.slice(0, encryptedChunkSize);
+        buffer = buffer.slice(encryptedChunkSize);
+        try {
+          const plain = await decryptOne(encChunk);
+          controller.enqueue(plain);
+        } catch (err) {
+          controller.error(err);
+          return;
+        }
+      }
+    },
+
+    async flush(controller) {
+      // Decrypt the final (potentially smaller) chunk
+      if (buffer.length > 0) {
+        try {
+          const plain = await decryptOne(buffer);
+          controller.enqueue(plain);
+        } catch (err) {
+          controller.error(err);
+        }
+      }
+    },
+  });
+}
