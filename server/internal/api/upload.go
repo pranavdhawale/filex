@@ -1,12 +1,17 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/pranavdhawale/filex/internal/config"
@@ -42,6 +47,7 @@ type InitUploadRequest struct {
 	Size           int64  `json:"size"`
 	TTLDays        int    `json:"ttl_days"`
 	EncryptionMode string `json:"encryption_mode"` // "anonymous" | "master"
+	Filename       string `json:"filename"`
 }
 
 type InitUploadResponse struct {
@@ -49,6 +55,64 @@ type InitUploadResponse struct {
 	UploadID    string `json:"upload_id"`
 	ChunkSize   int64  `json:"chunk_size"`
 	TotalChunks int    `json:"total_chunks"`
+}
+
+// sanitizeFilename removes path separators and trims whitespace,
+// keeping the original name + extension intact.
+func sanitizeFilename(name string) string {
+	// Strip any directory traversal
+	name = filepath.Base(name)
+	// Replace null bytes and control characters
+	name = strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return '_'
+		}
+		return r
+	}, name)
+	name = strings.TrimSpace(name)
+	if name == "" || name == "." {
+		return "file"
+	}
+	// Truncate to 200 runes (leave room for ~xxxx suffix)
+	if utf8.RuneCountInString(name) > 200 {
+		runes := []rune(name)
+		name = string(runes[:200])
+	}
+	return name
+}
+
+// randomHex returns n random hex characters.
+func randomHex(n int) string {
+	b := make([]byte, (n+1)/2)
+	rand.Read(b)
+	return hex.EncodeToString(b)[:n]
+}
+
+// resolveSlug generates a unique slug for the given filename.
+// If the filename is available, it's returned as-is.
+// On collision, appends a "~xxxx" suffix (4 random hex chars).
+func (h *UploadHandler) resolveSlug(r *http.Request, filename string) (string, error) {
+	slug := filename
+	exists, err := h.fileRepo.SlugExists(r.Context(), slug)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return slug, nil
+	}
+	// Collision — try up to 5 times with a random suffix
+	for i := 0; i < 5; i++ {
+		candidate := filename + "~" + randomHex(4)
+		exists, err := h.fileRepo.SlugExists(r.Context(), candidate)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
+	}
+	// Extremely unlikely — fall back to full uuid suffix
+	return filename + "~" + randomHex(8), nil
 }
 
 func (h *UploadHandler) HandleInit(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +139,8 @@ func (h *UploadHandler) HandleInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	filename := sanitizeFilename(req.Filename)
+
 	fileID := uuid.New().String()
 	objectName := fmt.Sprintf("uploads/%s", fileID)
 
@@ -90,11 +156,12 @@ func (h *UploadHandler) HandleInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store session in DB
+	// Store session in DB (including filename)
 	expiresAt := time.Now().Add(time.Duration(req.TTLDays) * 24 * time.Hour)
 	session := &models.MultipartSession{
 		ID:           fileID,
 		FileID:       fileID,
+		Filename:     filename,
 		UploadID:     uploadID,
 		OriginalSize: req.Size,
 		ChunkSize:    chunkSize,
@@ -181,7 +248,7 @@ func (h *UploadHandler) HandleComplete(w http.ResponseWriter, r *http.Request) {
 		// Check if file already exists (idempotency)
 		if existing, _ := h.fileRepo.GetByID(r.Context(), req.FileID); existing != nil {
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"status": "already_completed", "file_id": req.FileID})
+			json.NewEncoder(w).Encode(map[string]string{"status": "already_completed", "file_id": req.FileID, "slug": existing.Slug})
 			return
 		}
 
@@ -213,6 +280,14 @@ func (h *UploadHandler) HandleComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve unique slug for this file
+	slug, err := h.resolveSlug(r, session.Filename)
+	if err != nil {
+		slog.Error("Failed to resolve slug", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	// Handle FEK wrapping
 	var finalEncryptedFEK string
 	if req.EncryptionMode == "anonymous" {
@@ -235,6 +310,8 @@ func (h *UploadHandler) HandleComplete(w http.ResponseWriter, r *http.Request) {
 	file := &models.File{
 		ID:             session.FileID,
 		ObjectKey:      objectName,
+		Filename:       session.Filename,
+		Slug:           slug,
 		Size:           session.OriginalSize,
 		TotalChunks:    session.TotalChunks,
 		EncryptionMode: req.EncryptionMode,
@@ -250,7 +327,7 @@ func (h *UploadHandler) HandleComplete(w http.ResponseWriter, r *http.Request) {
 			// One won the race, the other hit the unique _id constraint on the files collection.
 			// Treat as idempotently successful.
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"status": "already_completed", "file_id": req.FileID})
+			json.NewEncoder(w).Encode(map[string]string{"status": "already_completed", "file_id": req.FileID, "slug": slug})
 			return
 		}
 		slog.Error("Failed to insert file record", "error", err)
@@ -265,5 +342,6 @@ func (h *UploadHandler) HandleComplete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "completed",
 		"file_id": file.ID,
+		"slug":    file.Slug,
 	})
 }

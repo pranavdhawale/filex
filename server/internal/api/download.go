@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/pranavdhawale/filex/internal/config"
 	"github.com/pranavdhawale/filex/internal/crypto"
 	"github.com/pranavdhawale/filex/internal/repository"
@@ -33,28 +32,27 @@ type DownloadResponse struct {
 	DownloadURL    string    `json:"download_url"`
 	FEK            string    `json:"fek"` // Plaintext FEK for anonymous, encrypted for master
 	EncryptionMode string    `json:"encryption_mode"`
+	Filename       string    `json:"filename"` // Original filename for the save dialog
 	ExpiresAt      time.Time `json:"expires_at"`
 }
 
 func (h *DownloadHandler) HandleDownload(w http.ResponseWriter, r *http.Request) {
-	// Extract the ID from the path. Route is registered as GET /f/{id}
-	fileID := r.PathValue("id")
-	if fileID == "" {
-		http.Error(w, "missing file id", http.StatusBadRequest)
+	// Extract the slug from the path. Route is registered as GET /f/{id}
+	slug := r.PathValue("id")
+	if slug == "" {
+		http.Error(w, "missing file slug", http.StatusBadRequest)
 		return
 	}
 
-	// Validate UUID format
-	if _, err := uuid.Parse(fileID); err != nil {
-		slog.Warn("Invalid file ID format requested", "id", fileID, "ip", r.RemoteAddr)
-		http.Error(w, "invalid file id format", http.StatusBadRequest)
-		return
-	}
-
-	// Fetch file metadata
-	file, err := h.fileRepo.GetByID(r.Context(), fileID)
+	// Look up by slug (filename-based, no UUID fallback)
+	file, err := h.fileRepo.GetBySlug(r.Context(), slug)
 	if err != nil {
-		slog.Warn("File not found or expired", "id", fileID, "error", err)
+		slog.Error("Database error fetching file by slug", "slug", slug, "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if file == nil {
+		slog.Warn("File not found for slug", "slug", slug, "ip", r.RemoteAddr)
 		http.Error(w, "file not found", http.StatusNotFound)
 		return
 	}
@@ -68,7 +66,7 @@ func (h *DownloadHandler) HandleDownload(w http.ResponseWriter, r *http.Request)
 	newExpiry := baseExpiry.Add(24 * time.Hour)
 
 	// Atomically extend TTL in DB
-	if err := h.fileRepo.ExtendTTL(r.Context(), fileID, newExpiry); err != nil {
+	if err := h.fileRepo.ExtendTTL(r.Context(), file.ID, newExpiry); err != nil {
 		slog.Error("Failed to extend TTL", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
@@ -93,6 +91,7 @@ func (h *DownloadHandler) HandleDownload(w http.ResponseWriter, r *http.Request)
 		DownloadURL:    "/api/download/stream/" + file.ID,
 		FEK:            responseFEK,
 		EncryptionMode: file.EncryptionMode,
+		Filename:       file.Filename,
 		ExpiresAt:      newExpiry,
 	}
 
