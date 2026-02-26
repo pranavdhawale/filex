@@ -82,6 +82,11 @@ func (r *FileRepository) InitializeIndexes(ctx context.Context) error {
 		Keys: bson.D{{Key: "object_key", Value: 1}},
 	})
 
+	// Add an index on slug for fast download lookups.
+	_, _ = r.collection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "slug", Value: 1}},
+	})
+
 	fmt.Printf("File index initialized: %s\n", name)
 	return nil
 }
@@ -103,6 +108,31 @@ func (r *FileRepository) GetByID(ctx context.Context, id string) (*models.File, 
 		return nil, err
 	}
 	return &f, nil
+}
+
+// GetBySlug retrieves a file by its URL slug.
+func (r *FileRepository) GetBySlug(ctx context.Context, slug string) (*models.File, error) {
+	var f models.File
+	err := r.collection.FindOne(ctx, bson.M{"slug": slug}).Decode(&f)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &f, nil
+}
+
+// SlugExists checks whether a given slug is currently in use.
+func (r *FileRepository) SlugExists(ctx context.Context, slug string) (bool, error) {
+	err := r.collection.FindOne(ctx, bson.M{"slug": slug}, options.FindOne().SetProjection(bson.M{"_id": 1})).Err()
+	if err == mongo.ErrNoDocuments {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // ExtendTTL atomically sets expires_at to max(currentExpiry, newExpiry) and updates last_accessed.

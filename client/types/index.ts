@@ -8,12 +8,14 @@ export interface InitUploadResponse {
 export interface CompleteUploadResponse {
   status: string;
   file_id: string;
+  slug: string; // URL-safe filename slug, e.g. "report.pdf" or "report.pdf~a1b2"
 }
 
 export interface AccessFileResponse {
   download_url: string;
   fek: string; // base64 — plain FEK for anonymous, wrapped for master
   encryption_mode: "anonymous" | "master";
+  filename: string; // Original filename for the save dialog
   expires_at: string;
 }
 
@@ -40,6 +42,7 @@ export interface UploadProgress {
 
 export interface UploadResult {
   fileId: string;
+  slug: string;
   shareUrl: string;
   expiresAt: Date;
 }

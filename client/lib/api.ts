@@ -11,7 +11,8 @@ import type {
 export async function initUpload(
   size: number,
   ttlDays: number,
-  encryptionMode: EncryptionMode
+  encryptionMode: EncryptionMode,
+  filename: string
 ): Promise<InitUploadResponse> {
   const res = await fetch(`${API_BASE}/upload/init`, {
     method: "POST",
@@ -20,6 +21,7 @@ export async function initUpload(
       size,
       ttl_days: ttlDays,
       encryption_mode: encryptionMode,
+      filename,
     }),
   });
   if (!res.ok) {

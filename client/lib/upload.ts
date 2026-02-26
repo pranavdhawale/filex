@@ -48,7 +48,7 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
   // Init upload
-  const init = await initUpload(file.size, ttlDays, encryptionMode);
+  const init = await initUpload(file.size, ttlDays, encryptionMode, file.name);
   const serverChunkSize = init.chunk_size;
   const serverTotalChunks = init.total_chunks;
 
@@ -141,7 +141,7 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
     encryptedFEK = await wrapFEKWithPassphrase(fek, passphrase);
   }
 
-  await completeUpload(
+  const complete = await completeUpload(
     init.file_id,
     parts,
     encryptionMode,
@@ -152,9 +152,12 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + ttlDays);
 
+  const slug = complete.slug;
+
   return {
     fileId: init.file_id,
-    shareUrl: `${window.location.origin}/f/${init.file_id}`,
+    slug,
+    shareUrl: `${window.location.origin}/f/${encodeURIComponent(slug)}`,
     expiresAt,
   };
 }
