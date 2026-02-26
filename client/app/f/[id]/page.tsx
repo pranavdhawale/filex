@@ -52,7 +52,6 @@ export default function DownloadPage({
     try {
       await startDownload({
         fileId: id,
-        filename: `file-${id.slice(0, 8)}`,
         passphrase: meta.encryption_mode === "master" ? passphrase : undefined,
         onProgress: (progress) => setDownloadProgress(progress),
       });
@@ -104,7 +103,7 @@ export default function DownloadPage({
               <div className="flex items-center gap-2">
                 <Lock size={14} className="text-[#555]" />
                 <code className="text-sm text-blue-400 font-mono truncate">
-                  {id}
+                  {decodeURIComponent(id)}
                 </code>
               </div>
               <p className="text-sm text-[#888]">
@@ -158,6 +157,9 @@ export default function DownloadPage({
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-white/80 font-medium">File ready</p>
+                {meta?.filename && (
+                  <p className="text-xs text-[#888] mt-0.5 font-mono truncate">{meta.filename}</p>
+                )}
                 <p className="text-xs text-[#888] mt-0.5">
                   Decryption happens entirely in your browser.
                 </p>
