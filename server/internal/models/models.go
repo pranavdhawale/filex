@@ -8,6 +8,8 @@ import (
 type File struct {
 	ID             string    `bson:"_id" json:"id"`
 	ObjectKey      string    `bson:"object_key" json:"object_key"`
+	Filename       string    `bson:"filename" json:"filename"`           // Original filename, e.g. "report.pdf"
+	Slug           string    `bson:"slug" json:"slug"`                  // URL-safe slug, e.g. "report.pdf" or "report.pdf~a1b2"
 	Size           int64     `bson:"size" json:"size"`
 	TotalChunks    int       `bson:"total_chunks" json:"total_chunks"`
 	EncryptionMode string    `bson:"encryption_mode" json:"encryption_mode"` // "anonymous" | "master"
@@ -22,6 +24,7 @@ type File struct {
 type MultipartSession struct {
 	ID           string    `bson:"_id" json:"id"`
 	FileID       string    `bson:"file_id" json:"file_id"`
+	Filename     string    `bson:"filename" json:"filename"` // Original filename sent by client
 	UploadID     string    `bson:"upload_id" json:"upload_id"`
 	OriginalSize int64     `bson:"original_size" json:"original_size"`
 	ChunkSize    int64     `bson:"chunk_size" json:"chunk_size"`
