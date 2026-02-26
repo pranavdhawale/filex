@@ -67,10 +67,18 @@ async function saveWithFileSystemAPI(
   if (!("showSaveFilePicker" in window)) return false;
 
   try {
+    // Extract extension (e.g. ".pdf") so macOS doesn't warn about ".com" mismatch
+    const ext = filename.includes(".")
+      ? "." + filename.split(".").pop()!.toLowerCase()
+      : "";
+    const acceptMap: Record<string, string[]> = {
+      "application/octet-stream": ext ? [ext] : [],
+    };
+
     // Prompt the OS "Save As" dialog — must be called during a user gesture
     const handle = await (window as any).showSaveFilePicker({
       suggestedName: filename,
-      types: [{ description: "File", accept: { "application/octet-stream": [] } }],
+      types: [{ description: "File", accept: acceptMap }],
     });
 
     const writable = await handle.createWritable();
@@ -164,10 +172,13 @@ async function saveWithBlobFallback(
  * 4. Pipes through progressTransform → decryptTransformer → disk (or blob fallback).
  */
 export async function startDownload(opts: DownloadOptions): Promise<void> {
-  const { fileId, filename = `file-${fileId.slice(0, 8)}`, passphrase, onProgress } = opts;
+  const { fileId, passphrase, onProgress } = opts;
 
   // ── Step 1: Fetch metadata ────────────────────────────────────────────────
   const meta = await accessFile(fileId);
+
+  // Use the original filename from the server (includes extension)
+  const filename = meta.filename || opts.filename || `file-${fileId.slice(0, 8)}`;
 
   // ── Step 2: Resolve FEK ───────────────────────────────────────────────────
   let fekBytes: Uint8Array;
