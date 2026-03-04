@@ -10,7 +10,7 @@ import type {
 
 export async function initUpload(
   size: number,
-  ttlDays: number,
+  ttlSeconds: number,
   encryptionMode: EncryptionMode,
   filename: string
 ): Promise<InitUploadResponse> {
@@ -19,7 +19,7 @@ export async function initUpload(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       size,
-      ttl_days: ttlDays,
+      ttl_seconds: ttlSeconds,
       encryption_mode: encryptionMode,
       filename,
     }),

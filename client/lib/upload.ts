@@ -42,13 +42,13 @@ async function uploadChunkWithRetry(
 }
 
 export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
-  const { file, ttlDays, encryptionMode, passphrase, onProgress } = opts;
+  const { file, ttlSeconds, encryptionMode, passphrase, onProgress } = opts;
 
   const fek = generateFEK();
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
   // Init upload
-  const init = await initUpload(file.size, ttlDays, encryptionMode, file.name);
+  const init = await initUpload(file.size, ttlSeconds, encryptionMode, file.name);
   const serverChunkSize = init.chunk_size;
   const serverTotalChunks = init.total_chunks;
 
@@ -150,7 +150,7 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
   );
 
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + ttlDays);
+  expiresAt.setSeconds(expiresAt.getSeconds() + ttlSeconds);
 
   const slug = complete.slug;
 

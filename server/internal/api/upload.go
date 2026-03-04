@@ -45,7 +45,7 @@ func NewUploadHandler(
 
 type InitUploadRequest struct {
 	Size           int64  `json:"size"`
-	TTLDays        int    `json:"ttl_days"`
+	TTLSeconds     int    `json:"ttl_seconds"`
 	EncryptionMode string `json:"encryption_mode"` // "anonymous" | "master"
 	Filename       string `json:"filename"`
 }
@@ -128,9 +128,9 @@ func (h *UploadHandler) HandleInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validTTLs := map[int]bool{1: true, 7: true, 15: true}
-	if !validTTLs[req.TTLDays] {
-		http.Error(w, "invalid TTL days (must be 1, 7, or 15)", http.StatusBadRequest)
+	validTTLs := map[int]bool{1800: true, 3600: true, 86400: true}
+	if !validTTLs[req.TTLSeconds] {
+		http.Error(w, "invalid TTL seconds (must be 1800, 3600, or 86400)", http.StatusBadRequest)
 		return
 	}
 
@@ -157,7 +157,7 @@ func (h *UploadHandler) HandleInit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store session in DB (including filename)
-	expiresAt := time.Now().Add(time.Duration(req.TTLDays) * 24 * time.Hour)
+	expiresAt := time.Now().Add(time.Duration(req.TTLSeconds) * time.Second)
 	session := &models.MultipartSession{
 		ID:           fileID,
 		FileID:       fileID,

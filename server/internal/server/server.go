@@ -29,7 +29,7 @@ func New(cfg *config.Config, uploadHandler *api.UploadHandler, downloadHandler *
 	mux.HandleFunc("POST /upload/init", api.RateLimitMiddleware(limiter, "init", 10, time.Minute, uploadHandler.HandleInit))
 
 	// POST /upload/chunk: for streaming chunks to MinIO
-	mux.HandleFunc("POST /upload/chunk", api.RateLimitMiddleware(limiter, "upload_chunk", 100, time.Minute, uploadHandler.HandleChunkUpload))
+	mux.HandleFunc("POST /upload/chunk", api.RateLimitMiddleware(limiter, "upload_chunk", 2000, time.Minute, uploadHandler.HandleChunkUpload))
 
 	// POST /upload/complete: 10 reqs / 1 min
 	mux.HandleFunc("POST /upload/complete", api.RateLimitMiddleware(limiter, "complete", 10, time.Minute, uploadHandler.HandleComplete))
@@ -52,8 +52,8 @@ func New(cfg *config.Config, uploadHandler *api.UploadHandler, downloadHandler *
 		Addr:         ":" + cfg.Port,
 		Handler:      handler,
 		IdleTimeout:  time.Minute,
-		ReadTimeout:  1*time.Hour,
-		WriteTimeout: 1*time.Hour,
+		ReadTimeout:  1 * time.Hour,
+		WriteTimeout: 1 * time.Hour,
 	}
 
 	return &Server{

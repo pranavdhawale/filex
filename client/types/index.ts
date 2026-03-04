@@ -20,11 +20,11 @@ export interface AccessFileResponse {
 }
 
 export type EncryptionMode = "anonymous" | "master";
-export type TTLDays = 1 | 7 | 15;
+export type TTLSeconds = 1800 | 3600 | 86400;
 
 export interface UploadOptions {
   file: File;
-  ttlDays: TTLDays;
+  ttlSeconds: TTLSeconds;
   encryptionMode: EncryptionMode;
   passphrase?: string;
   onProgress: (progress: UploadProgress) => void;
