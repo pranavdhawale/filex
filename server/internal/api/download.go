@@ -57,20 +57,9 @@ func (h *DownloadHandler) HandleDownload(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Calculate new TTL (+1 day from whichever is later: current expiry or now)
-	now := time.Now().UTC()
-	baseExpiry := file.ExpiresAt
-	if now.After(baseExpiry) { // Strictly speaking, Mongo TTL should delete this, but just in case
-		baseExpiry = now
-	}
-	newExpiry := baseExpiry.Add(24 * time.Hour)
+	// Ensure we only use original expiry
+	newExpiry := file.ExpiresAt
 
-	// Atomically extend TTL in DB
-	if err := h.fileRepo.ExtendTTL(r.Context(), file.ID, newExpiry); err != nil {
-		slog.Error("Failed to extend TTL", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
 
 	// Handle FEK unwrapping
 	var responseFEK string
