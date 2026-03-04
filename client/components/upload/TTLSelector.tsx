@@ -1,18 +1,18 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import type { TTLDays } from "@/types";
+import type { TTLSeconds } from "@/types";
 
 interface TTLSelectorProps {
-  value: TTLDays;
-  onChange: (v: TTLDays) => void;
+  value: TTLSeconds;
+  onChange: (v: TTLSeconds) => void;
   disabled?: boolean;
 }
 
-const OPTIONS: { value: TTLDays; label: string }[] = [
-  { value: 1, label: "1 Day" },
-  { value: 7, label: "7 Days" },
-  { value: 15, label: "15 Days" },
+const OPTIONS: { value: TTLSeconds; label: string }[] = [
+  { value: 1800, label: "30 Minutes" },
+  { value: 3600, label: "1 Hour" },
+  { value: 86400, label: "1 Day" },
 ];
 
 export default function TTLSelector({ value, onChange, disabled }: TTLSelectorProps) {
@@ -25,7 +25,7 @@ export default function TTLSelector({ value, onChange, disabled }: TTLSelectorPr
         <select
           value={value}
           disabled={disabled}
-          onChange={(e) => onChange(Number(e.target.value) as TTLDays)}
+          onChange={(e) => onChange(Number(e.target.value) as TTLSeconds)}
           className="
             w-full appearance-none bg-[#0a0a0a] border border-[#1a1a1a]
             rounded-lg px-4 py-2.5 text-sm text-white/90
