@@ -1,65 +1,60 @@
 services:
-  api:
+  filex:
     build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: filex-api
+      context: .
+      dockerfile: server/Dockerfile
+    env_file: /srv/docker/secrets/filex.env
+    environment:
+      - TZ=Asia/Kolkata
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
-    env_file:
-      - /srv/docker/secrets/filex.env
     networks:
-      - internal
-      - proxy
+      - filex
 
-  worker-expiry:
+  filex-client:
     build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: filex-worker-expiry
+      context: .
+      dockerfile: client/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - filex
     restart: unless-stopped
-    command: ["--worker=expiry"]
-    env_file:
-      - /srv/docker/secrets/filex.env
     networks:
-      - internal
+      - filex
 
-  worker-multipart:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: filex-worker-multipart
-    restart: unless-stopped
-    command: ["--worker=multipart"]
-    env_file:
-      - /srv/docker/secrets/filex.env
+  mongo:
+    image: mongo:8
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ping:1})"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
-      - internal
+      - filex
 
-  worker-gc:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: filex-worker-gc
-    restart: unless-stopped
-    command: ["--worker=gc"]
-    env_file:
-      - /srv/docker/secrets/filex.env
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
-      - internal
-
-  client:
-    build:
-      context: ./client
-      dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_API_URL=https://filex-api.pranavdhawale.in
-    container_name: filex-client
-    restart: unless-stopped
-    networks:
-      - proxy
+      - filex
 
 networks:
-  internal:
-    external: true
-  proxy:
-    external: true
+  filex:
+
+volumes:
+  mongo_data:
+  minio_data:

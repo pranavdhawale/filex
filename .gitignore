@@ -69,3 +69,6 @@ next-env.d.ts
 # Environment variables
 .env
 .env.prod
+
+# Vite build output
+client/dist/

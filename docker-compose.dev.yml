@@ -1,151 +1,66 @@
 services:
+  filex:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - MONGO_URI=mongodb://mongo:27017
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_BUCKET=filex
+      - MINIO_DOWNLOAD_PREFIX=/minio
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - ENVIRONMENT=development
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+      - TZ=Asia/Kolkata
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  filex-client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - filex
+    restart: unless-stopped
+
   mongo:
-    image: bitnami/mongodb:latest
-    container_name: filex-mongo
+    image: mongo:8
     ports:
       - "27017:27017"
-    environment:
-      - MONGODB_REPLICA_SET_MODE=primary
-      - MONGODB_REPLICA_SET_NAME=rs0
-      - MONGODB_PORT_NUMBER=27017
-      - MONGODB_INITIAL_PRIMARY_HOST=mongo
-      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=27017
-      - MONGODB_ADVERTISED_HOSTNAME=mongo
-      - MONGODB_ENABLE_JOURNAL=true
-      - ALLOW_EMPTY_PASSWORD=yes
     volumes:
-      - mongo_data:/bitnami/mongodb
-
-  redis:
-    image: redis:latest
-    container_name: filex-redis
-    ports:
-      - "6379:6379"
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ping:1})"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   minio:
     image: minio/minio:latest
-    container_name: filex-minio
+    command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
-      - MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:8080
-    command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  api:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: filex-api
-    ports:
-      - "8080:8080"
-    environment:
-      - PORT=8080
-      - ENVIRONMENT=development
-      - MONGO_URI=mongodb://mongo:27017/?replicaSet=rs0
-      - REDIS_URI=redis://redis:6379
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_PUBLIC_ENDPOINT=localhost:9000
-      - MINIO_BUCKET=filex
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - SWK=super-secret-wrapper-key
-    depends_on:
-      mongo:
-        condition: service_started
-      redis:
-        condition: service_started
-      minio:
-        condition: service_healthy
-
-  worker-expiry:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: filex-worker-expiry
-    command: ["--worker=expiry"]
-    environment:
-      - ENVIRONMENT=development
-      - MONGO_URI=mongodb://mongo:27017/?replicaSet=rs0
-      - REDIS_URI=redis://redis:6379
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-    depends_on:
-      mongo:
-        condition: service_started
-      redis:
-        condition: service_started
-      minio:
-        condition: service_healthy
-
-  worker-multipart:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: filex-worker-multipart
-    command: ["--worker=multipart"]
-    environment:
-      - ENVIRONMENT=development
-      - MONGO_URI=mongodb://mongo:27017/?replicaSet=rs0
-      - REDIS_URI=redis://redis:6379
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-    depends_on:
-      mongo:
-        condition: service_started
-      redis:
-        condition: service_started
-      minio:
-        condition: service_healthy
-
-  worker-gc:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: filex-worker-gc
-    command: ["--worker=gc"]
-    environment:
-      - ENVIRONMENT=development
-      - MONGO_URI=mongodb://mongo:27017/?replicaSet=rs0
-      - REDIS_URI=redis://redis:6379
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-    depends_on:
-      mongo:
-        condition: service_started
-      redis:
-        condition: service_started
-      minio:
-        condition: service_healthy
-
-  client:
-    build:
-      context: ./client
-      target: development
-    container_name: filex-client
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./client:/app
-      - /app/node_modules
-      - /app/.next
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8080
-    depends_on:
-      api:
-        condition: service_started
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   mongo_data:
