@@ -1,57 +1,77 @@
 package ratelimit
 
 import (
-	"context"
-	"fmt"
+	"hash/fnv"
+	"sync"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 )
 
+type bucket struct {
+	tokens   float64
+	lastTime time.Time
+}
+
+type shard struct {
+	mu      sync.Mutex
+	buckets map[uint64]*bucket
+}
+
 type RateLimiter struct {
-	client *redis.Client
+	shards []shard
+	mask   uint64
 }
 
-func NewRateLimiter(client *redis.Client) *RateLimiter {
-	return &RateLimiter{
-		client: client,
+func NewRateLimiter(numShards uint64) *RateLimiter {
+	if numShards == 0 {
+		numShards = 64
 	}
+	s := uint64(1)
+	for s < numShards {
+		s <<= 1
+	}
+	rl := &RateLimiter{
+		shards: make([]shard, s),
+		mask:   s - 1,
+	}
+	for i := range rl.shards {
+		rl.shards[i].buckets = make(map[uint64]*bucket)
+	}
+	return rl
 }
 
-// Allow checks if a request from the given IP is allowed under the sliding window limit.
-// It uses a Redis pipeline to ensure atomicity.
-func (r *RateLimiter) Allow(ctx context.Context, ip string, action string, limit int, window time.Duration) (bool, error) {
-	key := fmt.Sprintf("rate:%s:%s", action, ip)
-	now := time.Now().UnixMilli()
-	windowStart := now - window.Milliseconds()
+func (r *RateLimiter) getShard(key uint64) *shard {
+	return &r.shards[key&r.mask]
+}
 
-	// Create a unique member ID for the ZSet entry
-	memberID := uuid.New().String()
+func (r *RateLimiter) Allow(key uint64, limit int, window time.Duration) bool {
+	s := r.getShard(key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	pipe := r.client.Pipeline()
-
-	// 1. Remove entries older than the window
-	pipe.ZRemRangeByScore(ctx, key, "-inf", fmt.Sprint(windowStart))
-
-	// 2. Add current request
-	pipe.ZAdd(ctx, key, redis.Z{
-		Score:  float64(now),
-		Member: memberID,
-	})
-
-	// 3. Count remaining entries
-	countCmd := pipe.ZCard(ctx, key)
-
-	// 4. Set expiry on the key to clean up inactive IPs
-	pipe.Expire(ctx, key, window)
-
-	_, err := pipe.Exec(ctx)
-	if err != nil {
-		return false, fmt.Errorf("redis pipeline failed: %w", err)
+	now := time.Now()
+	b, ok := s.buckets[key]
+	if !ok {
+		b = &bucket{tokens: float64(limit), lastTime: now}
+		s.buckets[key] = b
 	}
 
-	count := countCmd.Val()
+	elapsed := now.Sub(b.lastTime)
+	refill := float64(elapsed) / float64(window) * float64(limit)
+	b.tokens += refill
+	if b.tokens > float64(limit) {
+		b.tokens = float64(limit)
+	}
+	b.lastTime = now
 
-	return count <= int64(limit), nil
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
+}
+
+func HashIP(ip string) uint64 {
+	h := fnv.New64a()
+	h.Write([]byte(ip))
+	return h.Sum64()
 }

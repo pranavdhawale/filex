@@ -2,33 +2,47 @@ package models
 
 import (
 	"time"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// File represents the metadata of an uploaded file in MongoDB
 type File struct {
-	ID             string    `bson:"_id" json:"id"`
-	ObjectKey      string    `bson:"object_key" json:"object_key"`
-	Filename       string    `bson:"filename" json:"filename"`           // Original filename, e.g. "report.pdf"
-	Slug           string    `bson:"slug" json:"slug"`                  // URL-safe slug, e.g. "report.pdf" or "report.pdf~a1b2"
-	Size           int64     `bson:"size" json:"size"`
-	TotalChunks    int       `bson:"total_chunks" json:"total_chunks"`
-	EncryptionMode string    `bson:"encryption_mode" json:"encryption_mode"` // "anonymous" | "master"
-	EncryptedFEK   string    `bson:"encrypted_fek" json:"encrypted_fek"`
-	EmailHash      *string   `bson:"email_hash,omitempty" json:"email_hash,omitempty"`
-	CreatedAt      time.Time `bson:"created_at" json:"created_at"`
-	LastAccessed   time.Time `bson:"last_accessed" json:"last_accessed"`
-	ExpiresAt      time.Time `bson:"expires_at" json:"expires_at"`
+	ID            bson.ObjectID     `bson:"_id"                   json:"id"`
+	ObjectKey     string            `bson:"object_key"            json:"objectKey"`
+	Filename      string            `bson:"filename"              json:"filename"`
+	Slug          string            `bson:"slug"                  json:"slug"`
+	Size          int64             `bson:"size"                  json:"size"`
+	ContentType   string            `bson:"content_type"          json:"contentType"`
+	TotalChunks   int               `bson:"total_chunks"          json:"totalChunks"`
+	ChunkSize     int               `bson:"chunk_size"            json:"chunkSize"`
+	EncryptedFEK  string            `bson:"encrypted_fek"         json:"encryptedFek"`
+	Salt          string            `bson:"salt"                  json:"salt"`
+	UploadID      string            `bson:"upload_id"             json:"uploadId"`
+	ChunkHashRoot string            `bson:"chunk_hash_root"       json:"chunkHashRoot"`
+	ShareID       *bson.ObjectID    `bson:"share_id,omitempty"    json:"shareId,omitempty"`
+	MaxDownloads  int               `bson:"max_downloads"         json:"maxDownloads"`
+	DownloadCount int               `bson:"download_count"        json:"downloadCount"`
+	Status        string            `bson:"status"                json:"status"`
+	CreatedAt     time.Time         `bson:"created_at"            json:"createdAt"`
+	LastAccessed  time.Time         `bson:"last_accessed"         json:"lastAccessed"`
+	ExpiresAt     time.Time         `bson:"expires_at"            json:"expiresAt"`
 }
 
-// MultipartSession tracks the state of an S3 multipart upload in MongoDB
+type Share struct {
+	ID            bson.ObjectID    `bson:"_id"                   json:"id"`
+	Slug          string           `bson:"slug"                  json:"slug"`
+	FileIDs       []bson.ObjectID  `bson:"file_ids"              json:"fileIds"`
+	Salt          string           `bson:"salt"                  json:"salt"`
+	MaxDownloads  int              `bson:"max_downloads"         json:"maxDownloads"`
+	DownloadCount int              `bson:"download_count"        json:"downloadCount"`
+	ExpiresAt     time.Time        `bson:"expires_at"            json:"expiresAt"`
+	CreatedAt     time.Time        `bson:"created_at"            json:"createdAt"`
+}
+
 type MultipartSession struct {
-	ID           string    `bson:"_id" json:"id"`
-	FileID       string    `bson:"file_id" json:"file_id"`
-	Filename     string    `bson:"filename" json:"filename"` // Original filename sent by client
-	UploadID     string    `bson:"upload_id" json:"upload_id"`
-	OriginalSize int64     `bson:"original_size" json:"original_size"`
-	ChunkSize    int64     `bson:"chunk_size" json:"chunk_size"`
-	TotalChunks  int       `bson:"total_chunks" json:"total_chunks"`
-	CreatedAt    time.Time `bson:"created_at" json:"created_at"`
-	ExpiresAt    time.Time `bson:"expires_at" json:"expires_at"`
+	ID        bson.ObjectID `bson:"_id"                   json:"id"`
+	FileID    bson.ObjectID `bson:"file_id"               json:"fileId"`
+	UploadID  string        `bson:"upload_id"              json:"uploadId"`
+	CreatedAt time.Time     `bson:"created_at"             json:"createdAt"`
+	ExpiresAt time.Time     `bson:"expires_at"             json:"expiresAt"`
 }

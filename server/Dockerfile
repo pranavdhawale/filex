@@ -1,28 +1,14 @@
-# Build stage
-FROM golang:1.26-alpine AS builder
-
-WORKDIR /app
-
-# Copy go mod and sum files
-COPY go.mod go.sum ./
-
-# Download all dependencies. 
+# Stage 1: Build Go binary
+FROM golang:1.26-alpine AS go-builder
+WORKDIR /app/server
+COPY server/go.mod server/go.sum ./
 RUN go mod download
+COPY server/ .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /filex ./cmd/api/main.go
 
-# Copy the source code
-COPY . .
-
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o /api ./cmd/api/main.go
-
-# Final stage
+# Stage 2: Runtime
 FROM alpine:latest
-
 WORKDIR /
-
-COPY --from=builder /api /api
-
-# Expose port (default 8080)
+COPY --from=go-builder /filex /filex
 EXPOSE 8080
-
-ENTRYPOINT ["/api"]
+ENTRYPOINT ["/filex"]
