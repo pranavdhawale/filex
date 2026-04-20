@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -12,9 +14,10 @@ import (
 )
 
 type Storage struct {
-	client *minio.Client
-	core   *minio.Core
-	bucket string
+	client            *minio.Client
+	core              *minio.Core
+	bucket            string
+	downloadProxyPath string // e.g. "/minio" to rewrite presigned URLs through a reverse proxy
 }
 
 // NewStorage initializes a new MinIO storage client
@@ -34,12 +37,13 @@ func NewStorage(cfg *config.Config) (*Storage, error) {
 	}
 
 	s := &Storage{
-		client: client,
-		core:   core,
-		bucket: cfg.MinioBucket,
+		client:            client,
+		core:              core,
+		bucket:            cfg.MinioBucket,
+		downloadProxyPath: cfg.MinioDownloadPrefix,
 	}
 
-	// Ensure bucket exists and has the correct policy
+	// Ensure bucket exists
 	if err := s.ensureBucket(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to ensure bucket %s: %w", s.bucket, err)
 	}
@@ -47,7 +51,12 @@ func NewStorage(cfg *config.Config) (*Storage, error) {
 	return s, nil
 }
 
-// ensureBucket checks if the bucket exists, creates it if not, and sets policy.
+// Client returns the underlying minio.Client for health checks
+func (s *Storage) Client() *minio.Client {
+	return s.client
+}
+
+// ensureBucket checks if the bucket exists, creates it if not.
 func (s *Storage) ensureBucket(ctx context.Context) error {
 	exists, err := s.client.BucketExists(ctx, s.bucket)
 	if err != nil {
@@ -61,35 +70,8 @@ func (s *Storage) ensureBucket(ctx context.Context) error {
 		}
 	}
 
-	// Set anonymous download policy
-	// This is equivalent to `mc anonymous set download`
-	policy := fmt.Sprintf(`{
-		"Version": "2012-10-17",
-		"Statement": [
-			{
-				"Action": ["s3:GetBucketLocation", "s3:ListBucket"],
-				"Effect": "Allow",
-				"Principal": {"AWS": ["*"]},
-				"Resource": ["arn:aws:s3:::%s"]
-			},
-			{
-				"Action": ["s3:GetObject"],
-				"Effect": "Allow",
-				"Principal": {"AWS": ["*"]},
-				"Resource": ["arn:aws:s3:::%s/*"]
-			}
-		]
-	}`, s.bucket, s.bucket)
-
-	err = s.client.SetBucketPolicy(ctx, s.bucket, policy)
-	if err != nil {
-		return fmt.Errorf("failed to set bucket policy: %w", err)
-	}
-
 	return nil
 }
-
-// localhostRedirectTransport is no longer needed since we are not using publicClient
 
 // CreateMultipartUpload initializes a new multipart upload in MinIO
 func (s *Storage) CreateMultipartUpload(ctx context.Context, objectName string, contentType string) (string, error) {
@@ -132,6 +114,49 @@ func (s *Storage) CompleteMultipartUpload(ctx context.Context, objectName, uploa
 		return fmt.Errorf("failed to complete multipart upload: %w", err)
 	}
 	return nil
+}
+
+// GetPresignedURL generates a presigned GET URL with the given expiry and content-disposition.
+// When downloadProxyPath is set, the URL is rewritten to go through the reverse proxy
+// (e.g. "/minio/filex/...?sig") so browsers can download without CORS issues.
+func (s *Storage) GetPresignedURL(ctx context.Context, objectKey string, filename string, expiry time.Duration) (string, error) {
+	reqParams := make(url.Values)
+	reqParams.Set("response-content-disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	reqParams.Set("response-content-type", "application/octet-stream")
+
+	presignedURL, err := s.client.PresignedGetObject(ctx, s.bucket, objectKey, expiry, reqParams)
+	if err != nil {
+		return "", fmt.Errorf("presign URL: %w", err)
+	}
+
+	raw := presignedURL.String()
+
+	if s.downloadProxyPath != "" {
+		// Rewrite http://minio:9000/filex/... → /minio/filex/...
+		parsed, err := url.Parse(raw)
+		if err != nil {
+			return "", fmt.Errorf("parse presigned URL: %w", err)
+		}
+		parsed.Scheme = ""
+		parsed.Host = ""
+		rewritten := s.downloadProxyPath + parsed.String()
+		return rewritten, nil
+	}
+
+	return raw, nil
+}
+
+// ExistsByObjectKey checks whether an object exists in the bucket by its object key
+func (s *Storage) ExistsByObjectKey(ctx context.Context, objectKey string) (bool, error) {
+	_, err := s.client.StatObject(ctx, s.bucket, objectKey, minio.StatObjectOptions{})
+	if err != nil {
+		errResponse := minio.ToErrorResponse(err)
+		if errResponse.Code == "NoSuchKey" {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // GetObject returns a reader for the object
