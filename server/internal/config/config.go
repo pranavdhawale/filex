@@ -1,40 +1,35 @@
 package config
 
-import (
-	"os"
-)
+import "os"
 
-// Config holds all the environment-based configuration for the application.
 type Config struct {
 	Port                string
 	Environment         string
 	MongoURI            string
-	RedisURI            string
-	MinioEndpoint       string // internal (Docker service name) — used by Go server
+	MinioEndpoint       string
+	MinioPublicEndpoint string
 	MinioBucket         string
 	MinioAccessKey      string
 	MinioSecretKey      string
-	ServerWrapKey       string
+	MinioDownloadPrefix string // e.g. "/minio" — rewrites presigned URLs through a reverse proxy
+	AllowedOrigins      string // comma-separated, e.g. "http://localhost:5173,https://filex.pranavdhawale.in"
 }
 
-// Load reads from environment variables and provides defaults where appropriate.
 func Load() *Config {
-	minioEndpoint := getEnv("MINIO_ENDPOINT", "localhost:9000")
 	return &Config{
 		Port:                getEnv("PORT", "8080"),
 		Environment:         getEnv("ENVIRONMENT", "development"),
 		MongoURI:            getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		RedisURI:            getEnv("REDIS_URI", "redis://localhost:6379"),
-		MinioEndpoint:       minioEndpoint,
+		MinioEndpoint:       getEnv("MINIO_ENDPOINT", "localhost:9000"),
+		MinioPublicEndpoint: getEnv("MINIO_PUBLIC_ENDPOINT", "localhost:9000"),
 		MinioBucket:         getEnv("MINIO_BUCKET", "filex"),
 		MinioAccessKey:      getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinioSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),
-		ServerWrapKey:       getEnv("SWK", "default-swk-for-dev-change-in-prod"),
+		MinioDownloadPrefix: getEnv("MINIO_DOWNLOAD_PREFIX", ""),
+		AllowedOrigins:      getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
 	}
 }
 
-// getEnv retrieves the value of the environment variable named by the key.
-// It returns the fallback value if the variable is not present.
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
