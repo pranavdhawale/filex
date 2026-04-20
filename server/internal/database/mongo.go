@@ -2,44 +2,35 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
-	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
-// Connect connects to the MongoDB server at the given URI.
 func Connect(ctx context.Context, uri string) (*mongo.Client, error) {
-	slog.Debug("Connecting to MongoDB", "uri", uri)
-
 	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
 	}
 
-	// Ping the primary to verify connection
-	if err := client.Ping(ctx, readpref.Primary()); err != nil {
-		return nil, err
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if err := client.Ping(ctx, nil); err != nil {
+		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
 
-	slog.Info("Successfully connected to MongoDB")
+	slog.Info("Connected to MongoDB")
 	return client, nil
 }
 
-// Close gracefully closes the MongoDB connection.
 func Close(ctx context.Context, client *mongo.Client) error {
-	slog.Info("Closing MongoDB connection")
 	return client.Disconnect(ctx)
 }
 
-// GetDatabase returns the filex database instance.
 func GetDatabase(client *mongo.Client) *mongo.Database {
 	return client.Database("filex")
-}
-
-// ContextWithTimeout is a helper for repos.
-func ContextWithTimeout(d time.Duration) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), d)
 }
