@@ -1,4 +1,4 @@
-# FileX 🔐
+# FileX v2🔐
 
 **FileX** is a privacy-first file infrastructure system engineered for secure and encrypted file exchange 🛡️.
 
@@ -10,7 +10,7 @@ At its core, FileX represents **File Infrastructure for Locked Encrypted eXchang
 
 We built FileX on the principle of **Zero-Compromise Security**.
 
-- **Privacy First 🛡️**: Files are encrypted, and access is tightly controlled. 
+- **Privacy First 🛡️**: Files are encrypted, and access is tightly controlled.
 - **Scale Seamlessly 📈**: Built to handle massive files seamlessly using multipart uploads and S3-compatible object storage.
 - **Automated Lifecycle ⏳**: Auto-expiring links and automated garbage collection ensure no orphaned data is left behind.
 - **High Performance ⚡**: Powered with a Go backend and a Next.js App Router frontend for blazing-fast experiences.
@@ -19,20 +19,24 @@ We built FileX on the principle of **Zero-Compromise Security**.
 ## ✨ Features
 
 ### 🔐 Uncompromising Security
+
 - **End-to-End Encryption Support**: Files can be encrypted before storage using secure wrapper keys.
 - **Secure File Exchange**: Generates unique, secure access links for shared files.
 - **Privacy-focused**: Complete peace of mind knowing unauthorized users can't access your sensitive files.
 
 ### 📦 Robust File Handling
+
 - **Multipart Uploads**: Efficiently handles huge files by chunking them into smaller parts for reliable transfer and zero timeouts.
 - **Seamless Downloads**: High-speed, secure file retrieval directly to your device.
 
 ### ⚙️ Automated Data Management
+
 - **Link Expiry**: Automatically invalidate access to files after a set Time-to-Live (TTL).
 - **Garbage Collection**: Background jobs safely clean up orphaned or incomplete payloads to save storage.
 - **Background Processing**: Dedicated worker containers process expiry, gc, and multipart assemblies asynchronously.
 
 ### 🎨 Modern & Fast UI
+
 - **Next.js 16 App Router**: Leverage the latest React server components for fast rendering and optimal UX.
 - **Interactive Visuals**: WebGL-powered particle effects using OGL.
 
@@ -41,6 +45,7 @@ We built FileX on the principle of **Zero-Compromise Security**.
 FileX isn't just a file host; it's an architectural showcase of modern Go and Next.js built for security and scale.
 
 ### **Frontend** (The Interface) 🎨
+
 - **Next.js 16**: React framework with App Router for server-side rendering and static generation.
 - **React 19**: Utilizing the latest concurrent features.
 - **Tailwind CSS v4**: Utility-first CSS framework for rapid styling.
@@ -48,6 +53,7 @@ FileX isn't just a file host; it's an architectural showcase of modern Go and Ne
 - **Lucide React**: Beautiful, consistent icon set.
 
 ### **Backend** (The Engine) 🦍
+
 - **Go 1.26**: Raw performance and robust concurrency for API handling.
 - **MongoDB**: Primary database for file metadata, settings, and transaction tracking.
 - **Redis**: Fast, in-memory datastore for rate limiting, caching, and task queues.
@@ -55,6 +61,7 @@ FileX isn't just a file host; it's an architectural showcase of modern Go and Ne
 - **Dedicated Workers**: Separate Go micro-services for Expiry, Multipart jobs, and Garbage Collection.
 
 ### **Infrastructure** 🏗️
+
 - **Docker & Docker Compose**: Fully containerized setup for reproducible development and production environments.
 
 ## ⚡ Quick Start
@@ -84,11 +91,11 @@ FileX follows a robust **Micro-Services & Worker** architecture for responsive, 
 graph TD
     User[👤 User] -->|HTTP Request| Client[⚛️ Next.js Client]
     Client -->|REST API| Server[🦍 API Server]
-    
+
     Server -->|Metadata| Mongo[(🍃 MongoDB)]
     Server -->|Pub/Sub & Locks| Redis[(🟥 Redis)]
     Server -->|Encrypted Blob| MinIO[(🪣 MinIO Object Storage)]
-    
+
     Redis -->|Tasks| Workers[⚙️ Background Workers]
     Workers -->|Invalidate Links| Mongo
     Workers -->|Cleanup Orphans| MinIO
@@ -100,7 +107,7 @@ graph TD
 - **Client**: Next.js SPA/SSR application handling layout, cryptography (if client-side), and UX.
 - **API Server**: Central Go server handling request validation, routing, and access control.
 - **MinIO Storage**: Stores the encrypted file blobs securely.
-- **Background Workers**: 
+- **Background Workers**:
   - `worker-expiry`: Actively reaps expired shares.
   - `worker-multipart`: Constructs multipart chunks into a single file object.
   - `worker-gc`: Identifies and removes orphaned chunks or failed multi-part uploads.
