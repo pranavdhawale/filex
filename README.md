@@ -10,55 +10,65 @@ At its core, FileX represents **File Infrastructure for Locked Encrypted eXchang
 
 We built FileX on the principle of **Zero-Compromise Security**.
 
-- **Privacy First 🛡️**: Files are encrypted, and access is tightly controlled.
+- **Privacy First 🛡️**: Files are encrypted client-side, and access is tightly controlled.
 - **Scale Seamlessly 📈**: Built to handle massive files seamlessly using multipart uploads and S3-compatible object storage.
 - **Automated Lifecycle ⏳**: Auto-expiring links and automated garbage collection ensure no orphaned data is left behind.
-- **High Performance ⚡**: Powered with a Go backend and a Next.js App Router frontend for blazing-fast experiences.
-- **Engineering Excellence 🛠️**: Utilizing background workers (Redis + Go) to handle the heavy lifting off the main API thread.
+- **High Performance ⚡**: Powered with a Go backend and a React frontend with Vite for blazing-fast experiences.
+- **Engineering Excellence 🛠️**: Utilizing background workers (goroutines) to handle the heavy lifting off the main API thread.
 
 ## ✨ Features
 
 ### 🔐 Uncompromising Security
 
-- **End-to-End Encryption Support**: Files can be encrypted before storage using secure wrapper keys.
-- **Secure File Exchange**: Generates unique, secure access links for shared files.
+- **End-to-End Encryption**: Files are encrypted client-side using AES-256-GCM before storage. The server never sees plaintext or encryption keys.
+- **Argon2id Key Derivation**: Passphrases are strengthened with Argon2id (WASM) for GPU-resistant key derivation.
+- **Chunk-Level AEAD**: Each chunk includes file ID and chunk index in additional authenticated data, preventing reordering attacks.
 - **Privacy-focused**: Complete peace of mind knowing unauthorized users can't access your sensitive files.
 
 ### 📦 Robust File Handling
 
-- **Multipart Uploads**: Efficiently handles huge files by chunking them into smaller parts for reliable transfer and zero timeouts.
-- **Seamless Downloads**: High-speed, secure file retrieval directly to your device.
+- **Multipart Uploads**: Efficiently handles huge files by chunking them into 10MB parts for reliable transfer and zero timeouts.
+- **Concurrent Uploads**: Chunks are uploaded in parallel with progress tracking and integrity verification.
+- **Seamless Downloads**: High-speed, streaming decryption directly to your device via presigned URLs.
 
 ### ⚙️ Automated Data Management
 
-- **Link Expiry**: Automatically invalidate access to files after a set Time-to-Live (TTL).
-- **Garbage Collection**: Background jobs safely clean up orphaned or incomplete payloads to save storage.
-- **Background Processing**: Dedicated worker containers process expiry, gc, and multipart assemblies asynchronously.
+- **Link Expiry**: Automatically invalidate access to files after a set Time-to-Live (TTL: 30min, 1hr, 24hr).
+- **Garbage Collection**: Background workers safely clean up orphaned or incomplete uploads to save storage.
+- **Background Processing**: Dedicated goroutines handle expiry, GC, and multipart assemblies asynchronously.
 
 ### 🎨 Modern & Fast UI
 
-- **Next.js 16 App Router**: Leverage the latest React server components for fast rendering and optimal UX.
-- **Interactive Visuals**: WebGL-powered particle effects using OGL.
+- **Vite + React 19**: Fast development and optimized production builds with the latest React features.
+- **TanStack Router**: Type-safe, file-based routing for excellent DX.
+- **Tailwind CSS v4**: Utility-first CSS framework for rapid styling.
+- **OGL**: Ultra-lightweight WebGL library for dynamic particle UI effects.
 
 ## 🛠️ The Tech Stack
 
-FileX isn't just a file host; it's an architectural showcase of modern Go and Next.js built for security and scale.
+FileX isn't just a file host; it's an architectural showcase of modern Go and React built for security and scale.
 
 ### **Frontend** (The Interface) 🎨
 
-- **Next.js 16**: React framework with App Router for server-side rendering and static generation.
-- **React 19**: Utilizing the latest concurrent features.
+- **Vite 6**: Next-generation frontend build tool with hot module replacement.
+- **React 19**: Latest React with concurrent features and improved rendering.
+- **TanStack Router**: Type-safe routing with file-based route generation.
+- **TanStack Query**: Powerful server state management.
+- **Zustand**: Lightweight client state management.
 - **Tailwind CSS v4**: Utility-first CSS framework for rapid styling.
 - **OGL**: Ultra-lightweight WebGL library for dynamic UI elements.
 - **Lucide React**: Beautiful, consistent icon set.
+- **Argon2-browser**: WASM-based password hashing for key derivation.
+- **fflate**: Compression utilities.
+- **tus-js-client**: Resumable upload protocol support.
 
 ### **Backend** (The Engine) 🦍
 
 - **Go 1.26**: Raw performance and robust concurrency for API handling.
-- **MongoDB**: Primary database for file metadata, settings, and transaction tracking.
-- **Redis**: Fast, in-memory datastore for rate limiting, caching, and task queues.
-- **MinIO**: High-performance, S3-compatible object storage for securely preserving actual file data.
-- **Dedicated Workers**: Separate Go micro-services for Expiry, Multipart jobs, and Garbage Collection.
+- **MongoDB**: Primary database for file metadata, shares, and multipart sessions.
+- **MinIO**: High-performance, S3-compatible object storage for securely preserving encrypted file data.
+- **In-Memory Rate Limiting**: Sharded token bucket rate limiter (no Redis dependency for single-node deployments).
+- **Background Workers**: Goroutines for Expiry, Multipart jobs, and Garbage Collection.
 
 ### **Infrastructure** 🏗️
 
@@ -85,55 +95,90 @@ That's it! Everything boots up automatically.
 
 ## 🏗️ Architecture
 
-FileX follows a robust **Micro-Services & Worker** architecture for responsive, scalable file operations.
+FileX follows a robust **API Server + Background Workers** architecture for responsive, scalable file operations.
 
-```mermaid
-graph TD
-    User[👤 User] -->|HTTP Request| Client[⚛️ Next.js Client]
-    Client -->|REST API| Server[🦍 API Server]
-
-    Server -->|Metadata| Mongo[(🍃 MongoDB)]
-    Server -->|Pub/Sub & Locks| Redis[(🟥 Redis)]
-    Server -->|Encrypted Blob| MinIO[(🪣 MinIO Object Storage)]
-
-    Redis -->|Tasks| Workers[⚙️ Background Workers]
-    Workers -->|Invalidate Links| Mongo
-    Workers -->|Cleanup Orphans| MinIO
-    Workers -->|Complete Uploads| MinIO
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    CLIENT (Vite/React 19)                    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────────┐ │
+│  │ crypto.ts │  │ upload.ts │  │ api.ts   │  │ TanStack     │ │
+│  │ AES-GCM  │  │ multipart │  │ REST     │  │ Router/Zustand│ │
+│  └──────────┘  └──────────┘  └──────────┘  └───────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+                            │ HTTP/REST
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    API SERVER (Go 1.26)                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────────┐ │
+│  │ handler/ │  │ ratelimit/│  │ counter/ │  │ middleware    │ │
+│  │ endpoints│  │ in-memory │  │ download │  │ CORS, logging │ │
+│  └──────────┘  └──────────┘  └──────────┘  └───────────────┘ │
+│         │              │              │                       │
+│         ▼              ▼              ▼                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐          │
+│  │ MongoDB  │  │ MinIO    │  │ In-Memory Rate   │          │
+│  │ (metadata)│ │ (blobs)  │  │ Limiter (64 shard)│          │
+│  └──────────┘  └──────────┘  └──────────────────┘          │
+└──────────────────────────────────────────────────────────────┘
+                            │ goroutines
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│                  BACKGROUND WORKERS (same process)            │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐   │
+│  │ worker/expiry │  │ worker/gc    │  │ worker/multipart   │   │
+│  │ Reap expired │  │ Cleanup      │  │ Assemble chunks    │   │
+│  │ shares/files │  │ orphan files │  │ into complete      │   │
+│  └──────────────┘  └──────────────┘  └────────────────────┘   │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Components
 
-- **Client**: Next.js SPA/SSR application handling layout, cryptography (if client-side), and UX.
-- **API Server**: Central Go server handling request validation, routing, and access control.
-- **MinIO Storage**: Stores the encrypted file blobs securely.
-- **Background Workers**:
+- **Client**: Vite SPA handling encryption, chunking, and user experience.
+- **API Server**: Go server handling request validation, routing, rate limiting, and access control.
+- **MinIO Storage**: Stores the encrypted file blobs securely with presigned URL downloads.
+- **Background Workers**: Run as goroutines in the same process for:
   - `worker-expiry`: Actively reaps expired shares.
-  - `worker-multipart`: Constructs multipart chunks into a single file object.
-  - `worker-gc`: Identifies and removes orphaned chunks or failed multi-part uploads.
+  - `worker-gc`: Identifies and removes orphaned chunks or failed uploads.
+  - `worker-multipart`: Constructs multipart chunks into complete file objects.
 
 ## 📁 Project Structure
 
 ```
-bytefile/
-├── client/                 # Next.js 16 Front-End
-│   ├── app/                # App Router pages and layouts
-│   ├── components/         # Reusable UI components
-│   ├── lib/                # Client utilities
-│   ├── public/             # Static assets
-│   └── types/              # TypeScript definitions
+filex/
+├── client/                 # Vite + React Front-End
+│   ├── src/
+│   │   ├── components/    # Reusable UI components
+│   │   ├── hooks/         # React hooks (useUpload, useDownload)
+│   │   ├── lib/           # Client utilities (crypto, api, upload, download)
+│   │   ├── routes/        # TanStack Router file-based routes
+│   │   ├── store/         # Zustand state management
+│   │   └── main.tsx       # Application entry
+│   ├── public/            # Static assets (argon2.wasm)
+│   ├── package.json
+│   └── Dockerfile
 │
-├── server/                 # Go 1.26 Backend
-│   ├── cmd/                # Entrypoints for API and workers
-│   ├── internal/           # Core application logic
-│   │   ├── api/            # HTTP handlers & routes
-│   │   ├── crypto/         # Encryption mechanics
-│   │   ├── database/       # DB connection & models
-│   │   ├── storage/        # MinIO S3 operations
-│   │   └── workers/        # Background queue processors
-│   └── Dockerfile          # Multi-stage Go builder
+├── server/                # Go 1.26 Backend
+│   ├── cmd/api/main.go    # Entrypoint for API server
+│   └── internal/          # Core application logic
+│       ├── api/           # HTTP handlers & routes
+│       ├── config/        # Environment configuration
+│       ├── counter/       # In-memory download counter
+│       ├── database/      # MongoDB connection
+│       ├── handler/       # Request handlers (file, share, health)
+│       ├── models/        # Domain entities (File, Share, MultipartSession)
+│       ├── ratelimit/     # Sharded token bucket rate limiter
+│       ├── repository/    # Data access layer
+│       ├── server/        # HTTP server setup
+│       ├── slug/          # NanoID generation
+│       ├── storage/       # MinIO S3 operations
+│       └── worker/        # Background job processors
 │
-└── docker-compose.dev.yml  # Local dev orchestration
+├── docs/                   # Documentation
+├── docker-compose.dev.yml # Development orchestration
+├── docker-compose.prod.yml# Production orchestration
+├── SETUP_GUIDE.md         # Setup instructions
+└── README.md              # This file
 ```
 
 ## 👩💻 Development
@@ -156,13 +201,42 @@ docker-compose -f docker-compose.dev.yml down
 docker-compose -f docker-compose.dev.yml logs -f
 
 # View specific service logs
-docker-compose -f docker-compose.dev.yml logs -f api
-docker-compose -f docker-compose.dev.yml logs -f worker-gc
+docker-compose -f docker-compose.dev.yml logs -f filex
+docker-compose -f docker-compose.dev.yml logs -f mongo
+docker-compose -f docker-compose.dev.yml logs -f minio
 ```
+
+### Local Development (without Docker)
+
+```bash
+# Backend
+cd server
+go mod download
+go run ./cmd/api
+
+# Frontend
+cd client
+npm install
+npm run dev
+```
+
+## 🔒 Security Model
+
+FileX implements **client-side end-to-end encryption**:
+
+1. **Key Generation**: Client generates a random 256-bit File Encryption Key (FEK)
+2. **Key Wrapping**: FEK is wrapped with a key derived from the user's passphrase using Argon2id
+3. **Chunk Encryption**: Each 10MB chunk is encrypted with AES-256-GCM using:
+   - Unique IV per chunk (based on chunk index)
+   - AEAD = `fileId || chunkIndex` (prevents reordering attacks)
+4. **Server Storage**: Server only stores encrypted data + wrapped FEK + salt — never plaintext or keys
+5. **Download Flow**: Client unwraps FEK with passphrase, streams decryption chunk-by-chunk
+
+The server is **zero-knowledge** — it cannot decrypt files even if compromised.
 
 ## 🔒 Privacy & Data
 
-- **Encrypted at Rest**: Files are secured cryptographically.
+- **Encrypted at Rest**: Files are secured cryptographically before upload.
 - **Ephemeral Access**: Expiry limits mean your files never sit available forever.
 - **Self-Hosted Complete Control**: Keeps data in your hands entirely.
 - **No Tracking**: Your transfers are your business alone. We don't track your behavior.
