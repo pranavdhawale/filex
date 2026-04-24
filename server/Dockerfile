@@ -8,6 +8,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /filex ./cmd/api/main.go
 
 # Stage 2: Runtime
 FROM alpine:latest
+RUN apk add --no-cache tzdata
 WORKDIR /
 COPY --from=go-builder /filex /filex
 EXPOSE 8080
