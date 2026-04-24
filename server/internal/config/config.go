@@ -13,6 +13,7 @@ type Config struct {
 	MinioSecretKey      string
 	MinioDownloadPrefix string // e.g. "/minio" — rewrites presigned URLs through a reverse proxy
 	AllowedOrigins      string // comma-separated, e.g. "http://localhost:5173,https://filex.pranavdhawale.in"
+	MaxChunkSize        int64  // Max encrypted chunk body size in bytes
 }
 
 func Load() *Config {
@@ -27,6 +28,7 @@ func Load() *Config {
 		MinioSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),
 		MinioDownloadPrefix: getEnv("MINIO_DOWNLOAD_PREFIX", ""),
 		AllowedOrigins:      getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
+		MaxChunkSize:        11 * 1024 * 1024,
 	}
 }
 

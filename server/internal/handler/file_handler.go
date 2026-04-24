@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -24,11 +25,12 @@ import (
 )
 
 type FileHandler struct {
-	fileRepo    *repository.FileRepository
-	shareRepo   *repository.ShareRepository
-	sessionRepo *repository.MultipartRepository
-	storage     *storage.Storage
-	counter     *counter.DownloadCounter
+	fileRepo     *repository.FileRepository
+	shareRepo    *repository.ShareRepository
+	sessionRepo  *repository.MultipartRepository
+	storage      *storage.Storage
+	counter      *counter.DownloadCounter
+	maxChunkSize int64
 }
 
 func NewFileHandler(
@@ -37,13 +39,15 @@ func NewFileHandler(
 	sessionRepo *repository.MultipartRepository,
 	storage *storage.Storage,
 	counter *counter.DownloadCounter,
+	maxChunkSize int64,
 ) *FileHandler {
 	return &FileHandler{
-		fileRepo:    fileRepo,
-		shareRepo:   shareRepo,
-		sessionRepo: sessionRepo,
-		storage:     storage,
-		counter:     counter,
+		fileRepo:     fileRepo,
+		shareRepo:    shareRepo,
+		sessionRepo:  sessionRepo,
+		storage:      storage,
+		counter:      counter,
+		maxChunkSize: maxChunkSize,
 	}
 }
 
@@ -305,8 +309,15 @@ func (h *FileHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxChunkSize)
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "chunk body too large")
+			return
+		}
 		writeError(w, http.StatusBadRequest, "failed to read chunk data")
 		return
 	}
@@ -344,19 +355,19 @@ func (h *FileHandler) HandleGetAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Increment in-memory counter
-	h.counter.Increment(slugVal)
-
 	// Determine salt: if file belongs to a share, use share's salt
 	salt := file.Salt
 
-	// Generate presigned URL (5 min TTL)
+	// Generate presigned URL (5 min TTL) — before incrementing counter
 	presignedURL, err := h.storage.GetPresignedURL(r.Context(), file.ObjectKey, file.Filename, 5*time.Minute)
 	if err != nil {
 		slog.Error("Failed to generate presigned URL", "error", err)
 		writeError(w, http.StatusInternalServerError, "storage error")
 		return
 	}
+
+	// Increment in-memory counter only after successful presigned URL generation
+	h.counter.Increment(slugVal)
 
 	downloadsRemaining := -1
 	if file.MaxDownloads > 0 {
