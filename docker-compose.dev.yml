@@ -1,5 +1,5 @@
 services:
-  filex:
+  filex-server:
     build:
       context: .
       dockerfile: server/Dockerfile
@@ -30,13 +30,13 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - filex
+      - filex-server
     restart: unless-stopped
 
   mongo:
     image: mongo:8
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:

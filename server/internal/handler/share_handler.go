@@ -157,8 +157,6 @@ func (h *ShareHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.counter.Increment(shareSlug)
-
 	fileEntries := make([]ShareFileEntry, 0, len(share.FileIDs))
 	for _, fid := range share.FileIDs {
 		file, err := h.fileRepo.GetByID(r.Context(), fid)
@@ -172,6 +170,9 @@ func (h *ShareHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 			ContentType: file.ContentType,
 		})
 	}
+
+	// Increment counter after all data is successfully fetched
+	h.counter.Increment(shareSlug)
 
 	downloadsRemaining := -1
 	if share.MaxDownloads > 0 {

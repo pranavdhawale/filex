@@ -62,20 +62,21 @@ func main() {
 	}
 
 	// Initialize rate limiter (in-memory)
-	limiter := ratelimit.NewRateLimiter(64)
+	apiLimiter := ratelimit.NewRateLimiter(64)
+	uploadLimiter := ratelimit.NewRateLimiter(64)
 
 	// Initialize download counter
 	dlCounter := counter.NewDownloadCounter()
 
 	// Initialize handlers
-	fileHandler := handler.NewFileHandler(fileRepo, shareRepo, sessionRepo, minioStorage, dlCounter)
+	fileHandler := handler.NewFileHandler(fileRepo, shareRepo, sessionRepo, minioStorage, dlCounter, cfg.MaxChunkSize)
 	shareHandler := handler.NewShareHandler(shareRepo, fileRepo, minioStorage, dlCounter)
 
 	// Initialize health checker
 	health := handler.NewHealthChecker(dbClient, minioStorage.Client(), cfg.MinioBucket)
 
 	// Start server
-	srv := server.New(cfg, fileHandler, shareHandler, health, limiter)
+	srv := server.New(cfg, fileHandler, shareHandler, health, apiLimiter, uploadLimiter)
 
 	// Start workers in goroutines
 	workerDeps := worker.Dependencies{

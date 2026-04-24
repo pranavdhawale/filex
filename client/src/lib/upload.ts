@@ -1,5 +1,6 @@
-import { generateFEK, encryptChunk, bytesToBase64, wrapFEK } from "./crypto";
+import { generateFEK, encryptChunk, bytesToBase64, wrapFEK, importEncryptKey } from "./crypto";
 import { initUpload, completeUpload } from "./api";
+import { retryFetch } from "./retry";
 
 const CHUNK_SIZE = 10 * 1024 * 1024;
 
@@ -37,6 +38,9 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
   // Derive wrapping key and wrap FEK
   const encryptedFEK = await wrapFEK(fek, passphrase, salt);
 
+  // Import the CryptoKey ONCE and reuse for all chunks
+  const fekKey = await importEncryptKey(fek);
+
   // Initialize upload on server
   const init = await initUpload({
     filename: file.name,
@@ -49,7 +53,7 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
     total_chunks: totalChunks,
   });
 
-  // Upload encrypted chunks via multipart
+  // Upload encrypted chunks with retry
   const chunkHashes: string[] = [];
   let chunksDone = 0;
   let bytesUploaded = 0;
@@ -60,7 +64,6 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
     const sliceEnd = Math.min(sliceStart + CHUNK_SIZE, file.size);
     const slice = file.slice(sliceStart, sliceEnd);
 
-    // Encrypt chunk
     onProgress?.({
       phase: "encrypting",
       chunksDone,
@@ -72,7 +75,7 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
     });
 
     const plaintext = await slice.arrayBuffer();
-    const encrypted = await encryptChunk(plaintext, fek, init.slug, i);
+    const encrypted = await encryptChunk(plaintext, fekKey, init.slug, i);
 
     // Compute SHA-256 hash of plaintext chunk for integrity
     const hashBuffer = await crypto.subtle.digest("SHA-256", plaintext);
@@ -80,18 +83,22 @@ export async function startUpload(opts: UploadOptions): Promise<UploadResult> {
     const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
     chunkHashes.push(hashHex);
 
-    // Upload chunk
+    // Upload chunk with retry (exponential backoff for 429/5xx)
     const partNumber = i + 1;
     const url = new URL(init.upload_url, window.location.origin);
     url.searchParams.set("file_id", init.file_id);
     url.searchParams.set("upload_id", init.upload_id);
     url.searchParams.set("part_number", partNumber.toString());
 
-    const uploadRes = await fetch(url.toString(), {
-      method: "POST",
-      body: encrypted,
-      headers: { "Content-Type": "application/octet-stream" },
-    });
+    const uploadRes = await retryFetch(
+      () =>
+        fetch(url.toString(), {
+          method: "POST",
+          body: encrypted as BodyInit,
+          headers: { "Content-Type": "application/octet-stream" },
+        }),
+      { maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 15000 }
+    );
 
     if (!uploadRes.ok) {
       throw new Error(`Chunk upload failed (${uploadRes.status})`);

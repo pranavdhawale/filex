@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"mime"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -121,7 +123,9 @@ func (s *Storage) CompleteMultipartUpload(ctx context.Context, objectName, uploa
 // (e.g. "/minio/filex/...?sig") so browsers can download without CORS issues.
 func (s *Storage) GetPresignedURL(ctx context.Context, objectKey string, filename string, expiry time.Duration) (string, error) {
 	reqParams := make(url.Values)
-	reqParams.Set("response-content-disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	encodedFilename := mime.QEncoding.Encode("utf-8", filename)
+	reqParams.Set("response-content-disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=%s`,
+		escapeQuotedFilename(filename), encodedFilename))
 	reqParams.Set("response-content-type", "application/octet-stream")
 
 	presignedURL, err := s.client.PresignedGetObject(ctx, s.bucket, objectKey, expiry, reqParams)
@@ -216,6 +220,17 @@ func (s *Storage) ListParts(ctx context.Context, objectName, uploadID string) ([
 		})
 	}
 	return parts, nil
+}
+
+// escapeQuotedFilename replaces characters that would break the
+// Content-Disposition header's quoted-string production (RFC 2616 §2.2).
+func escapeQuotedFilename(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '"' || r == '\\' || r < 0x20 {
+			return '_'
+		}
+		return r
+	}, name)
 }
 
 // BucketExists checks if the bucket exists
