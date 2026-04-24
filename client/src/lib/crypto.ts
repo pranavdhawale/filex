@@ -42,13 +42,23 @@ async function importFEK(fekBytes: Uint8Array, usage: KeyUsage): Promise<CryptoK
   );
 }
 
+export async function importEncryptKey(fekBytes: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    "raw",
+    toBuffer(fekBytes),
+    { name: ALGORITHM, length: KEY_LENGTH },
+    false,
+    ["encrypt"]
+  );
+}
+
 export async function encryptChunk(
   plaintext: ArrayBuffer,
-  fekBytes: Uint8Array,
+  fekOrKey: Uint8Array | CryptoKey,
   fileId: string,
   chunkIndex: number
 ): Promise<Uint8Array> {
-  const key = await importFEK(fekBytes, "encrypt");
+  const key = fekOrKey instanceof CryptoKey ? fekOrKey : await importFEK(fekOrKey, "encrypt");
   const iv = buildIV(chunkIndex);
   const aad = buildAEAD(fileId, chunkIndex);
 
