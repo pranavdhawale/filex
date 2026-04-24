@@ -23,7 +23,8 @@ func New(
 	fileHandler *handler.FileHandler,
 	shareHandler *handler.ShareHandler,
 	health *handler.HealthChecker,
-	limiter *ratelimit.RateLimiter,
+	apiLimiter *ratelimit.RateLimiter,
+	uploadLimiter *ratelimit.RateLimiter,
 ) *Server {
 	mux := http.NewServeMux()
 
@@ -31,19 +32,19 @@ func New(
 	mux.HandleFunc("GET /healthz", health.HandleHealthz)
 	mux.HandleFunc("GET /readyz", health.HandleReadyz)
 
-	// API endpoints with rate limiting
+	// API endpoints — rate limited per IP per endpoint
 	mux.HandleFunc("POST /api/v1/files/init",
-		handler.RateLimitMiddleware(limiter, 10, time.Minute, fileHandler.HandleInit))
+		handler.RateLimitMiddleware(apiLimiter, "POST /api/v1/files/init", 10, time.Minute, fileHandler.HandleInit))
 	mux.HandleFunc("POST /api/v1/files/complete",
-		handler.RateLimitMiddleware(limiter, 10, time.Minute, fileHandler.HandleComplete))
+		handler.RateLimitMiddleware(apiLimiter, "POST /api/v1/files/complete", 10, time.Minute, fileHandler.HandleComplete))
 	mux.HandleFunc("POST /api/v1/files/{slug}/access",
-		handler.RateLimitMiddleware(limiter, 60, time.Minute, fileHandler.HandleGetAccess))
+		handler.RateLimitMiddleware(apiLimiter, "POST /api/v1/files/{slug}/access", 60, time.Minute, fileHandler.HandleGetAccess))
 	mux.HandleFunc("POST /upload/{uploadID}",
-		handler.RateLimitMiddleware(limiter, 30, time.Minute, fileHandler.HandleChunkUpload))
+		handler.RateLimitMiddleware(uploadLimiter, "POST /upload/", 300, time.Minute, fileHandler.HandleChunkUpload))
 	mux.HandleFunc("POST /api/v1/shares",
-		handler.RateLimitMiddleware(limiter, 10, time.Minute, shareHandler.HandleCreate))
+		handler.RateLimitMiddleware(apiLimiter, "POST /api/v1/shares", 10, time.Minute, shareHandler.HandleCreate))
 	mux.HandleFunc("GET /api/v1/shares/{shareSlug}",
-		handler.RateLimitMiddleware(limiter, 60, time.Minute, shareHandler.HandleGet))
+		handler.RateLimitMiddleware(apiLimiter, "GET /api/v1/shares/{shareSlug}", 60, time.Minute, shareHandler.HandleGet))
 
 	// Middleware stack
 	var h http.Handler = mux
