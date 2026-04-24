@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"encoding/binary"
 	"hash/fnv"
 	"sync"
 	"time"
@@ -74,4 +75,22 @@ func HashIP(ip string) uint64 {
 	h := fnv.New64a()
 	h.Write([]byte(ip))
 	return h.Sum64()
+}
+
+// CompositeKey combines an IP hash with an endpoint string to create a unique
+// per-(IP, endpoint) bucket key. This ensures different endpoints get independent
+// rate limits for the same IP.
+func CompositeKey(ipHash uint64, endpoint string) uint64 {
+	h := fnv.New64a()
+	var buf [8]byte
+	binary.LittleEndian.PutUint64(buf[:], ipHash)
+	h.Write(buf[:])
+	h.Write([]byte(endpoint))
+	return h.Sum64()
+}
+
+// AllowWithKey is the same as Allow but accepts a pre-composed key.
+// Use CompositeKey(ipHash, endpoint) to create a per-endpoint bucket per IP.
+func (r *RateLimiter) AllowWithKey(key uint64, limit int, window time.Duration) bool {
+	return r.Allow(key, limit, window)
 }

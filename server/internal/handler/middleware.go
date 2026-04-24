@@ -3,6 +3,8 @@ package handler
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pranavdhawale/filex/internal/ratelimit"
@@ -38,12 +40,16 @@ func CORSMiddleware(allowedOrigins map[string]bool, next http.Handler) http.Hand
 	})
 }
 
-func RateLimitMiddleware(limiter *ratelimit.RateLimiter, limit int, window time.Duration, next http.HandlerFunc) http.HandlerFunc {
+// RateLimitMiddleware creates a per-endpoint rate limiter middleware.
+// The endpoint string is used as part of the rate limit key so different
+// endpoints get independent buckets per IP.
+func RateLimitMiddleware(limiter *ratelimit.RateLimiter, endpoint string, limit int, window time.Duration, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := extractIP(r)
-		key := ratelimit.HashIP(ip)
+		key := ratelimit.CompositeKey(ratelimit.HashIP(ip), endpoint)
 		if !limiter.Allow(key, limit, window) {
-			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			w.Header().Set("Retry-After", strconv.Itoa(int(window.Seconds())))
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate limit exceeded"})
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -69,12 +75,15 @@ func (w *statusResponseWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// extractIP returns the client IP from X-Forwarded-For (first IP only),
+// X-Real-IP, or RemoteAddr.
 func extractIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
+		ips := strings.SplitN(strings.TrimSpace(xff), ",", 2)
+		return strings.TrimSpace(ips[0])
 	}
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+		return strings.TrimSpace(xri)
 	}
 	return r.RemoteAddr
 }
