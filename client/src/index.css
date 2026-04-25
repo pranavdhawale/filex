@@ -1,1 +1,148 @@
 @import "tailwindcss";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.55;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: var(--text-main);
+
+  /* Apple Semantic Colors */
+  --color-primary: #007aff;
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-error: #ff3b30;
+  --color-caution: #ffcc00;
+
+  /* Apple Gray Scale */
+  --gray-light: #e5e5ea;
+  --gray-mid: #8e8e93;
+  --gray-dark2: #3a3a3c;
+  --gray-dark: #1c1c1e;
+
+  /* Glassmorphism Variables (Graphite Dark) */
+  --glass-bg: rgba(20, 20, 22, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.55);
+  --accent-color: #d1d1d6;
+  --text-main: #f2f2f3;
+  --text-dim: rgba(242, 242, 243, 0.65);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+  --button-hover: rgba(255, 255, 255, 0.12);
+  --bg-gradient: #000000;
+  --orb-1: #2a2a2e;
+  --orb-2: #3a3a40;
+  --orb-3: #1c1c20;
+
+  /* Adaptive Glass Element Backgrounds */
+  --glass-item-bg: rgba(255, 255, 255, 0.03);
+  --btn-bg-idle: rgba(255, 255, 255, 0.05);
+  --glass-border-dim: rgba(255, 255, 255, 0.04);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg-gradient);
+  overflow-x: hidden;
+}
+
+.btn-glass {
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  padding: 0.8em 1.6em;
+  font-size: 1em;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: var(--btn-bg-idle);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-glass:hover {
+  background-color: var(--button-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-glass:active {
+  transform: translateY(0);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+/* Fluid Typography */
+html {
+  font-size: 16px;
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 1280px) {
+  html {
+    font-size: 17px;
+  }
+}
+
+@media (min-width: 1536px) {
+  html {
+    font-size: 18px;
+  }
+}
+
+/* Touch-friendly interactive elements */
+@media (max-width: 767px) {
+  button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Responsive scrollbar */
+@media (max-width: 767px) {
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+}
+
+/* Startup animation fade-in utility */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 300ms ease-out;
+}
