@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Download, Loader2, AlertCircle } from "lucide-react";
+import { Download, AlertCircle } from "lucide-react";
 import { useDownload } from "../../hooks/useDownload";
 import { getShare } from "../../lib/api";
 
@@ -39,7 +39,6 @@ function SharePage() {
     }
     setPhase("downloading");
     setPassphraseError(null);
-    // Download each file sequentially
     for (const file of files) {
       try {
         await download({ slug: file.slug, passphrase });
@@ -57,18 +56,18 @@ function SharePage() {
       <div className="w-full max-w-lg space-y-8">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">FileX</h1>
-          <p className="text-sm text-[#888]">Shared files</p>
+          <p className="text-sm text-[var(--text-dim)]">Shared files</p>
         </div>
 
-        <div className="border border-[#111] rounded-lg bg-[#050505] p-6 space-y-5">
-          {phase === "loading" && <p className="text-sm text-[#888]">Loading...</p>}
+        <div className="border border-[var(--glass-border-dim)] rounded-lg bg-[var(--glass-bg)] backdrop-blur-xl shadow-[var(--glass-shadow)] p-6 flex flex-col gap-5">
+          {phase === "loading" && <p className="text-sm text-[var(--text-dim)]">Loading...</p>}
 
           {(phase === "prompt" || phase === "downloading") && (
             <>
               <div className="space-y-2">
-                <p className="text-sm text-white/80 font-medium">{files.length} file{files.length !== 1 ? "s" : ""} shared with you</p>
+                <p className="text-sm text-[var(--text-main)] font-medium">{files.length} file{files.length !== 1 ? "s" : ""} shared with you</p>
                 {files.map((f) => (
-                  <div key={f.slug} className="text-xs text-[#888] font-mono truncate">{f.filename} ({(f.size / 1024 / 1024).toFixed(1)} MB)</div>
+                  <div key={f.slug} className="text-xs text-[var(--text-dim)] font-mono truncate">{f.filename} ({(f.size / 1024 / 1024).toFixed(1)} MB)</div>
                 ))}
               </div>
 
@@ -77,14 +76,14 @@ function SharePage() {
                 placeholder="Enter passphrase..."
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2.5 text-sm text-white/90 placeholder:text-[#444] hover:border-[#333] focus:border-[#444] transition-colors"
+                className="w-full bg-[var(--glass-item-bg)] border border-[var(--glass-border-dim)] rounded-lg px-4 py-2.5 text-sm text-[var(--text-main)] placeholder:text-[var(--text-dim)] hover:border-[var(--glass-border)] focus:border-[var(--glass-border)] transition-colors"
               />
               {passphraseError && <p className="text-xs text-red-400/80">{passphraseError}</p>}
 
               <button
                 onClick={handleDownloadAll}
                 disabled={phase === "downloading"}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-white text-black hover:bg-white/90 disabled:opacity-50 transition-opacity"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium !bg-white !text-black hover:!bg-white/90 disabled:opacity-50 transition-opacity"
               >
                 <Download size={14} />
                 {phase === "downloading" ? "Downloading..." : "Download All"}
@@ -92,19 +91,19 @@ function SharePage() {
             </>
           )}
 
-          {phase === "done" && <p className="text-sm text-green-400">All downloads complete!</p>}
+          {phase === "done" && <p className="text-sm text-[var(--color-success)]">All downloads complete!</p>}
           {phase === "expired" && (
             <div className="flex gap-3 items-start">
               <AlertCircle size={16} className="text-red-400/70 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-white/80">Share not found</p>
-                <p className="text-xs text-[#888] mt-1">This share has expired or never existed.</p>
+                <p className="text-sm font-medium text-[var(--text-main)]">Share not found</p>
+                <p className="text-xs text-[var(--text-dim)] mt-1">This share has expired or never existed.</p>
               </div>
             </div>
           )}
         </div>
 
-        <p className="text-center text-xs text-[#333]">Decryption happens entirely in your browser.</p>
+        <p className="text-center text-xs text-[var(--text-dim)]">Decryption happens entirely in your browser.</p>
       </div>
     </main>
   );

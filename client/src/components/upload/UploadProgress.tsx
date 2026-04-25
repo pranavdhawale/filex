@@ -20,13 +20,13 @@ export function UploadProgress({ progress }: UploadProgressProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-white/70">
+        <span className="text-sm text-[var(--text-dim)]">
           {phaseLabel[progress.phase] || "Working"} — {pct}%{speed}{eta}
         </span>
       </div>
-      <div className="h-0.5 bg-[#111] rounded-full overflow-hidden">
+      <div className="h-0.5 bg-[var(--glass-border-dim)] rounded-full overflow-hidden">
         <div
-          className="h-full bg-blue-500 rounded-full transition-all duration-300"
+          className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-300"
           style={{ width: `${pct}%` }}
         />
       </div>
