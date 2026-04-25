@@ -16,7 +16,7 @@ export function TTLSelector({ value, onChange, disabled }: TTLSelectorProps) {
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
       disabled={disabled}
-      className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2.5 text-sm text-white/90 hover:border-[#333] focus:border-[#444] transition-colors disabled:opacity-50"
+      className="w-full bg-[var(--glass-item-bg)] border border-[var(--glass-border-dim)] rounded-lg px-4 py-2.5 text-sm text-[var(--text-main)] hover:border-[var(--glass-border)] focus:border-[var(--glass-border)] transition-colors disabled:opacity-50"
     >
       {TTL_OPTIONS.map((opt) => (
         <option key={opt.value} value={opt.value}>
