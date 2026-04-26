@@ -1,0 +1,74 @@
+.startup-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-gradient);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.typewriter-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.typewriter-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 3.5rem;
+  letter-spacing: -1.5px;
+
+  --gradient-light: var(--text-main);
+  --gradient-purple: #a78bfa;
+  --gradient-accent: #7c3aed;
+}
+
+.brand-letter {
+  background: linear-gradient(
+    to right,
+    var(--gradient-light) 0%,
+    var(--gradient-purple) 40%,
+    var(--gradient-accent) 100%
+  );
+  background-size: 250% 100%;
+  background-position: 0% center;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.typewriter-text-middle {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.typewriter-text-middle .brand-letter {
+  background-position: 40% center;
+}
+
+.brand-letter-x {
+  font-size: 4rem;
+  background-position: 100% center;
+}
+
+@media (max-width: 640px) {
+  .typewriter-container {
+    font-size: 2.5rem;
+  }
+
+  .brand-letter-x {
+    font-size: 2.8rem;
+  }
+}

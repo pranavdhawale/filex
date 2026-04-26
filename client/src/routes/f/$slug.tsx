@@ -57,17 +57,17 @@ function DownloadPage() {
       <div className="w-full max-w-lg space-y-8">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">FileX</h1>
-          <p className="text-sm text-[#888]">Encrypted file access</p>
+          <p className="text-sm text-[var(--text-dim)]">Encrypted file access</p>
         </div>
 
-        <div className="border border-[#111] rounded-lg bg-[#050505] p-6 space-y-5">
+        <div className="border border-[var(--glass-border-dim)] rounded-lg bg-[var(--glass-bg)] backdrop-blur-xl shadow-[var(--glass-shadow)] p-6 flex flex-col gap-5">
           {phase === "loading" && (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <Lock size={14} className="text-[#555]" />
-                <code className="text-sm text-blue-400 font-mono truncate">{decodeURIComponent(slug)}</code>
+                <Lock size={14} className="text-[var(--text-dim)]" />
+                <code className="text-sm text-[var(--color-primary)] font-mono truncate">{decodeURIComponent(slug)}</code>
               </div>
-              <button onClick={handleLoad} className="w-full py-2.5 rounded-lg text-sm font-medium bg-white text-black hover:bg-white/90 transition-opacity">
+              <button onClick={handleLoad} className="w-full py-2.5 rounded-lg text-sm font-medium !bg-white !text-black hover:!bg-white/90 transition-opacity">
                 Load file
               </button>
             </div>
@@ -76,8 +76,8 @@ function DownloadPage() {
           {phase === "prompt" && (
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-white/80 font-medium">Passphrase required</p>
-                <p className="text-xs text-[#888] mt-0.5">Enter the passphrase to decrypt this file.</p>
+                <p className="text-sm text-[var(--text-main)] font-medium">Passphrase required</p>
+                <p className="text-xs text-[var(--text-dim)] mt-0.5">Enter the passphrase to decrypt this file.</p>
               </div>
               <input
                 type="password"
@@ -86,10 +86,10 @@ function DownloadPage() {
                 onChange={(e) => setPassphrase(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && fetchAndDownload()}
                 autoFocus
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2.5 text-sm text-white/90 placeholder:text-[#444] hover:border-[#333] focus:border-[#444] transition-colors"
+                className="w-full bg-[var(--glass-item-bg)] border border-[var(--glass-border-dim)] rounded-lg px-4 py-2.5 text-sm text-[var(--text-main)] placeholder:text-[var(--text-dim)] hover:border-[var(--glass-border)] focus:border-[var(--glass-border)] transition-colors"
               />
               {passphraseError && <p className="text-xs text-red-400/80">{passphraseError}</p>}
-              <button onClick={fetchAndDownload} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-white text-black hover:bg-white/90 transition-opacity">
+              <button onClick={fetchAndDownload} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium !bg-white !text-black hover:!bg-white/90 transition-opacity">
                 <Download size={14} />
                 Decrypt & Download
               </button>
@@ -99,29 +99,29 @@ function DownloadPage() {
           {phase === "downloading" && (
             <div className="space-y-4 animate-fade-in">
               <div className="flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin text-blue-400" />
-                <span className="text-sm text-white/70">
+                <Loader2 size={14} className="animate-spin text-[var(--color-primary)]" />
+                <span className="text-sm text-[var(--text-dim)]">
                   {progress ? `${progress.phase}...` : "Starting..."}
                 </span>
               </div>
               {progress && (
-                <div className="h-0.5 bg-[#111] rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${progress.totalBytes > 0 ? Math.round((progress.receivedBytes / progress.totalBytes) * 100) : 0}%` }} />
+                <div className="h-0.5 bg-[var(--glass-border-dim)] rounded-full overflow-hidden">
+                  <div className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-300" style={{ width: `${progress.totalBytes > 0 ? Math.round((progress.receivedBytes / progress.totalBytes) * 100) : 0}%` }} />
                 </div>
               )}
             </div>
           )}
 
           {phase === "done" && (
-            <p className="text-sm text-green-400">Download complete!</p>
+            <p className="text-sm text-[var(--color-success)]">Download complete!</p>
           )}
 
           {phase === "expired" && (
             <div className="flex gap-3 items-start">
               <AlertCircle size={16} className="text-red-400/70 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-white/80">File not found</p>
-                <p className="text-xs text-[#888] mt-1">This file has expired or never existed.</p>
+                <p className="text-sm font-medium text-[var(--text-main)]">File not found</p>
+                <p className="text-xs text-[var(--text-dim)] mt-1">This file has expired or never existed.</p>
               </div>
             </div>
           )}
@@ -130,13 +130,13 @@ function DownloadPage() {
             <div className="flex gap-3 items-start">
               <AlertCircle size={16} className="text-red-400/70 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-white/80">Something went wrong</p>
+                <p className="text-sm font-medium text-[var(--text-main)]">Something went wrong</p>
               </div>
             </div>
           )}
         </div>
 
-        <p className="text-center text-xs text-[#333]">Decryption happens entirely in your browser. The server never has access to your file.</p>
+        <p className="text-center text-xs text-[var(--text-dim)]">Decryption happens entirely in your browser. The server never has access to your file.</p>
       </div>
     </main>
   );

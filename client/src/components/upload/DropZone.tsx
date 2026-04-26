@@ -34,7 +34,7 @@ export function DropZone({ onFileSelected, disabled }: DropZoneProps) {
       onDrop={handleDrop}
       className={`
         border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-        ${dragOver ? "border-blue-500 bg-blue-500/5" : "border-[#222] hover:border-[#444]"}
+        ${dragOver ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5" : "border-[var(--glass-border)] hover:border-[var(--glass-border)]"}
         ${disabled ? "opacity-50 cursor-not-allowed" : ""}
       `}
       onClick={() => !disabled && document.getElementById("file-input")?.click()}
@@ -46,7 +46,7 @@ export function DropZone({ onFileSelected, disabled }: DropZoneProps) {
         onChange={handleChange}
         disabled={disabled}
       />
-      <p className="text-sm text-[#888]">
+      <p className="text-sm text-[var(--text-dim)]">
         {disabled ? "Uploading..." : "Drop a file here or click to browse"}
       </p>
     </div>

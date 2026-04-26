@@ -29,23 +29,23 @@ function HomePage() {
         <div className="flex-1 space-y-8 min-w-0">
           <div className="space-y-1">
             <h1 className="text-xl font-semibold tracking-tight">FileX</h1>
-            <p className="text-sm text-[#888]">End-to-end encrypted file sharing. Server sees nothing.</p>
+            <p className="text-sm text-[var(--text-dim)]">End-to-end encrypted file sharing. Server sees nothing.</p>
           </div>
 
-          <div className="border border-[#111] rounded-lg bg-[#050505] p-6 space-y-5">
+          <div className="border border-[var(--glass-border-dim)] rounded-lg bg-[var(--glass-bg)] backdrop-blur-xl shadow-[var(--glass-shadow)] p-6 flex flex-col gap-5">
             <DropZone onFileSelected={setFile} disabled={phase === "uploading"} />
-            {file && <p className="text-sm text-white/70">{file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)</p>}
-            <div className="border-t border-[#111]" />
+            {file && <p className="text-sm text-[var(--text-dim)]">{file.name} ({(file.size / 1024 / 1024).toFixed(1)} MB)</p>}
+            <div className="border-t border-[var(--glass-border-dim)]" />
             <TTLSelector value={ttl} onChange={setTtl} disabled={phase === "uploading"} />
             <div className="space-y-2">
-              <label className="text-xs text-[#888]">Passphrase</label>
+              <label className="text-xs text-[var(--text-dim)]">Passphrase</label>
               <input
                 type="password"
                 placeholder="Enter a passphrase..."
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
                 disabled={phase === "uploading"}
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-4 py-2.5 text-sm text-white/90 placeholder:text-[#444] hover:border-[#333] focus:border-[#444] transition-colors disabled:opacity-50"
+                className="w-full bg-[var(--glass-item-bg)] border border-[var(--glass-border-dim)] rounded-lg px-4 py-2.5 text-sm text-[var(--text-main)] placeholder:text-[var(--text-dim)] hover:border-[var(--glass-border)] focus:border-[var(--glass-border)] transition-colors disabled:opacity-50"
               />
             </div>
 
@@ -58,7 +58,7 @@ function HomePage() {
             <button
               onClick={handleUpload}
               disabled={!file || !passphrase.trim() || phase === "uploading"}
-              className="w-full py-2.5 rounded-lg text-sm font-medium bg-white text-black hover:bg-white/90 disabled:opacity-25 disabled:cursor-not-allowed transition-opacity"
+              className="w-full py-2.5 rounded-lg text-sm font-medium !bg-white !text-black hover:!bg-white/90 disabled:opacity-25 disabled:cursor-not-allowed transition-opacity"
             >
               {phase === "uploading" ? "Encrypting & Uploading..." : "Encrypt & Upload"}
             </button>
@@ -81,7 +81,7 @@ function HomePage() {
           }}
         >
           {result && (
-            <div className="border border-[#111] rounded-lg bg-[#050505] p-6">
+            <div className="border border-[var(--glass-border-dim)] rounded-lg bg-[var(--glass-bg)] backdrop-blur-xl shadow-[var(--glass-shadow)] p-6">
               <CompletionCard
                 shareUrl={result.shareUrl}
                 passphrase={passphrase}
